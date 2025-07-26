@@ -1,0 +1,97 @@
+{
+  "name": "nfticket-protocol",
+  "version": "1.0.0",
+  "description": "Open-source NFT ticketing protocol with anti-scalping features",
+  "author": "Sowad Al-Mughni",
+  "license": "MIT",
+  "keywords": [
+    "nft",
+    "ticketing",
+    "blockchain",
+    "ethereum",
+    "anti-scalping",
+    "poap",
+    "web3",
+    "erc721"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/nfticket-protocol.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/nfticket-protocol/issues"
+  },
+  "homepage": "https://github.com/your-username/nfticket-protocol#readme",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "test:coverage": "npx hardhat coverage",
+    "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "npx hardhat run scripts/deploy.js --network sepolia",
+    "deploy:mainnet": "npx hardhat run scripts/deploy.js --network mainnet",
+    "verify:sepolia": "npx hardhat verify --network sepolia",
+    "verify:mainnet": "npx hardhat verify --network mainnet",
+    "node": "npx hardhat node",
+    "clean": "npx hardhat clean",
+    "dashboard:dev": "cd nfticket-dashboard && pnpm run dev",
+    "dashboard:build": "cd nfticket-dashboard && pnpm run build",
+    "mobile:android": "cd mobile-app/NFTicketApp && npx react-native run-android",
+    "mobile:ios": "cd mobile-app/NFTicketApp && npx react-native run-ios",
+    "mobile:start": "cd mobile-app/NFTicketApp && npx react-native start",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md}\"",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.2.0",
+    "@types/mocha": ">=9.1.0",
+    "chai": "^4.2.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "hardhat": "^2.19.0",
+    "hardhat-gas-reporter": "^1.0.8",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5",
+    "prettier-plugin-solidity": "^1.3.1",
+    "solidity-coverage": "^0.8.1",
+    "ts-node": ">=8.0.0",
+    "typechain": "^8.3.0",
+    "typescript": ">=4.5.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.1",
+    "dotenv": "^16.4.1",
+    "ethers": "^6.10.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ],
+    "*.sol": [
+      "prettier --write"
+    ]
+  },
+  "workspaces": [
+    "nfticket-dashboard",
+    "mobile-app/NFTicketApp"
+  ]
+}
+
