@@ -2,14 +2,52 @@ const { ethers } = require("ethers");
 
 // Configuration - should be environment variables in production
 const PRIVATE_KEY = process.env.SIGNER_PRIVATE_KEY || "0x0123456789012345678901234567890123456789012345678901234567890123"; 
-const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
-const NFTICKET_CONTRACT_ADDRESS = process.env.NFTICKET_CONTRACT_ADDRESS || "0x0000000000000000000000000000000000000000";
-const CHAIN_ID = parseInt(process.env.CHAIN_ID || "31337");
+const DEFAULT_CHAIN_ID = parseInt(process.env.CHAIN_ID || "31337");
+
+// Multi-chain RPC Configuration
+const RPC_URLS = {
+  1: process.env.RPC_URL_MAINNET || 'https://rpc.ankr.com/eth',
+  137: process.env.RPC_URL_POLYGON || 'https://rpc.ankr.com/polygon',
+  8453: process.env.RPC_URL_BASE || 'https://mainnet.base.org',
+  42161: process.env.RPC_URL_ARBITRUM || 'https://arb1.arbitrum.io/rpc',
+  11155111: process.env.RPC_URL_SEPOLIA || 'https://rpc.ankr.com/eth_sepolia',
+  84532: process.env.RPC_URL_BASE_SEPOLIA || 'https://sepolia.base.org',
+  421614: process.env.RPC_URL_ARBITRUM_SEPOLIA || 'https://sepolia-rollup.arbitrum.io/rpc',
+  31337: process.env.RPC_URL || 'http://127.0.0.1:8545', // Local
+};
+
+// Multi-chain Contract Addresses
+const CONTRACT_ADDRESSES = {
+  1: process.env.CONTRACT_MAINNET || '0x0000000000000000000000000000000000000000',
+  137: process.env.CONTRACT_POLYGON || '0x0000000000000000000000000000000000000000',
+  8453: process.env.CONTRACT_BASE || '0x0000000000000000000000000000000000000000',
+  42161: process.env.CONTRACT_ARBITRUM || '0x0000000000000000000000000000000000000000',
+  11155111: process.env.CONTRACT_SEPOLIA || '0x0000000000000000000000000000000000000000',
+  84532: process.env.CONTRACT_BASE_SEPOLIA || '0x0000000000000000000000000000000000000000',
+  421614: process.env.CONTRACT_ARBITRUM_SEPOLIA || '0x0000000000000000000000000000000000000000',
+  31337: process.env.NFTICKET_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000',
+};
+
+// Rotating QR Configuration
+const PROOF_EXPIRATION_SECONDS = parseInt(process.env.PROOF_EXPIRATION || "15"); // 15 seconds for rotating QR
+const NONCE_CLEANUP_INTERVAL = 60000; // Clean expired nonces every 60 seconds
 
 const wallet = new ethers.Wallet(PRIVATE_KEY);
 
-// Provider for on-chain verification
-const provider = new ethers.JsonRpcProvider(RPC_URL);
+// Provider cache for multi-chain
+const providers = new Map();
+
+// Get or create provider for a chain
+function getProvider(chainId) {
+  if (!providers.has(chainId)) {
+    const rpcUrl = RPC_URLS[chainId] || RPC_URLS[31337];
+    providers.set(chainId, new ethers.JsonRpcProvider(rpcUrl));
+  }
+  return providers.get(chainId);
+}
+
+// Nonce storage for replay attack prevention (in-memory Map, use Redis in production)
+const usedNonces = new Map(); // Map<nonce, expiresAt>
 
 // NFTicket contract ABI (minimal for ownership verification)
 const NFTICKET_ABI = [
@@ -18,12 +56,18 @@ const NFTICKET_ABI = [
   "function getEventInfo() view returns (string name, string description, uint256 date, string venue, uint256 royaltyCap, uint256 maxPrice, address royaltyRecipient)"
 ];
 
-const DOMAIN = {
-  name: "NFTicket",
-  version: "1",
-  chainId: CHAIN_ID,
-  verifyingContract: NFTICKET_CONTRACT_ADDRESS
-};
+// Create domain for a specific chain
+function createDomain(chainId, contractAddress) {
+  return {
+    name: "NFTicket",
+    version: "1",
+    chainId: chainId,
+    verifyingContract: contractAddress
+  };
+}
+
+// Default domain (for backward compatibility)
+const DOMAIN = createDomain(DEFAULT_CHAIN_ID, CONTRACT_ADDRESSES[DEFAULT_CHAIN_ID]);
 
 const TYPES = {
   TicketProof: [
@@ -34,19 +78,51 @@ const TYPES = {
   ]
 };
 
+// Cleanup expired nonces periodically to prevent memory leak
+setInterval(() => {
+  const now = Math.floor(Date.now() / 1000);
+  let cleaned = 0;
+  for (const [nonce, expiresAt] of usedNonces.entries()) {
+    if (expiresAt < now) {
+      usedNonces.delete(nonce);
+      cleaned++;
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`[SignerService] Cleaned ${cleaned} expired nonces. Active: ${usedNonces.size}`);
+  }
+}, NONCE_CLEANUP_INTERVAL);
+
 class SignerService {
   constructor() {
-    this.contract = null;
+    this.contracts = new Map(); // Cache contracts per chain
   }
 
   /**
-   * Get or create the NFTicket contract instance
+   * Get supported chain IDs
    */
-  getContract() {
-    if (!this.contract && NFTICKET_CONTRACT_ADDRESS !== "0x0000000000000000000000000000000000000000") {
-      this.contract = new ethers.Contract(NFTICKET_CONTRACT_ADDRESS, NFTICKET_ABI, provider);
+  getSupportedChains() {
+    return Object.keys(CONTRACT_ADDRESSES).map(id => parseInt(id));
+  }
+
+  /**
+   * Get or create the NFTicket contract instance for a specific chain
+   */
+  getContract(chainId = DEFAULT_CHAIN_ID) {
+    const contractAddress = CONTRACT_ADDRESSES[chainId];
+    
+    if (!contractAddress || contractAddress === "0x0000000000000000000000000000000000000000") {
+      return null;
     }
-    return this.contract;
+
+    const cacheKey = `${chainId}-${contractAddress}`;
+    
+    if (!this.contracts.has(cacheKey)) {
+      const provider = getProvider(chainId);
+      this.contracts.set(cacheKey, new ethers.Contract(contractAddress, NFTICKET_ABI, provider));
+    }
+    
+    return this.contracts.get(cacheKey);
   }
 
   /**
@@ -63,15 +139,18 @@ class SignerService {
   }
 
   /**
-   * Verify on-chain ownership of a ticket
+   * Verify on-chain ownership of a ticket (multi-chain support)
+   * @param {number} tokenId - The token ID to verify
+   * @param {string} expectedOwner - Expected owner address
+   * @param {number} chainId - Chain ID to verify on
    */
-  async verifyOnChainOwnership(tokenId, expectedOwner) {
-    const contract = this.getContract();
+  async verifyOnChainOwnership(tokenId, expectedOwner, chainId = DEFAULT_CHAIN_ID) {
+    const contract = this.getContract(chainId);
     
     if (!contract) {
       // Contract not configured - skip on-chain verification in dev mode
-      console.warn("NFTicket contract not configured - skipping on-chain verification");
-      return { valid: true, reason: "dev-mode" };
+      console.warn(`NFTicket contract not configured for chain ${chainId} - skipping on-chain verification`);
+      return { valid: true, reason: "dev-mode", chainId };
     }
 
     try {
@@ -81,7 +160,8 @@ class SignerService {
       if (actualOwner.toLowerCase() !== expectedOwner.toLowerCase()) {
         return { 
           valid: false, 
-          reason: `Token ${tokenId} is not owned by ${expectedOwner}` 
+          reason: `Token ${tokenId} is not owned by ${expectedOwner}`,
+          chainId
         };
       }
 
@@ -91,28 +171,37 @@ class SignerService {
       if (isUsed) {
         return { 
           valid: false, 
-          reason: `Token ${tokenId} has already been used` 
+          reason: `Token ${tokenId} has already been used`,
+          chainId
         };
       }
 
-      return { valid: true, actualOwner };
+      return { valid: true, actualOwner, chainId };
     } catch (error) {
       // Token might not exist
       if (error.message.includes("nonexistent token") || error.message.includes("invalid token")) {
-        return { valid: false, reason: `Token ${tokenId} does not exist` };
+        return { valid: false, reason: `Token ${tokenId} does not exist`, chainId };
       }
       
       console.error("On-chain verification error:", error);
-      return { valid: false, reason: "Failed to verify on-chain ownership" };
+      return { valid: false, reason: "Failed to verify on-chain ownership", chainId };
     }
   }
 
   /**
-   * Generate a signed ticket proof
+   * Generate a signed ticket proof with rotating nonce (multi-chain support)
+   * Proofs expire in 15 seconds (configurable via PROOF_EXPIRATION)
+   * @param {number} tokenId - The token ID
+   * @param {string} ownerAddress - Owner's address
+   * @param {number} chainId - Chain ID for the proof domain
    */
-  async generateTicketProof(tokenId, ownerAddress) {
+  async generateTicketProof(tokenId, ownerAddress, chainId = DEFAULT_CHAIN_ID) {
     const timestamp = Math.floor(Date.now() / 1000);
-    const nonce = Math.floor(Math.random() * 1000000);
+    // Cryptographically secure nonce to prevent guessing
+    const nonce = parseInt(ethers.hexlify(ethers.randomBytes(4)), 16);
+
+    const contractAddress = CONTRACT_ADDRESSES[chainId] || CONTRACT_ADDRESSES[DEFAULT_CHAIN_ID];
+    const domain = createDomain(chainId, contractAddress);
 
     const value = {
       tokenId: BigInt(tokenId),
@@ -121,22 +210,27 @@ class SignerService {
       nonce
     };
 
-    const signature = await wallet.signTypedData(DOMAIN, TYPES, value);
+    const signature = await wallet.signTypedData(domain, TYPES, value);
+    const expiresAt = timestamp + PROOF_EXPIRATION_SECONDS;
 
     return {
       data: {
         tokenId: Number(tokenId),
         owner: ownerAddress,
         timestamp,
-        nonce
+        nonce,
+        chainId // Include chain ID in proof data
       },
       signature,
-      expiresAt: timestamp + 60 // Proof valid for 60 seconds
+      expiresAt,
+      chainId,
+      // Client hint: refresh before expiration
+      refreshIn: Math.max(PROOF_EXPIRATION_SECONDS - 3, 5) // Refresh 3 seconds before expiry
     };
   }
 
   /**
-   * Verify a ticket proof signature and expiration
+   * Verify a ticket proof signature, expiration, and nonce (replay prevention)
    */
   verifyTicketProof(value, signature) {
     try {
@@ -147,17 +241,48 @@ class SignerService {
         return { valid: false, reason: "Invalid signature" };
       }
 
-      // Check 2: Timestamp is within acceptable window (60 seconds)
+      // Check 2: Timestamp is within acceptable window
       const currentTimestamp = Math.floor(Date.now() / 1000);
-      if (currentTimestamp - value.timestamp > 60) {
+      if (currentTimestamp - value.timestamp > PROOF_EXPIRATION_SECONDS) {
         return { valid: false, reason: "Proof expired" };
       }
 
-      return { valid: true, signer: recoveredAddress };
+      // Check 3: Nonce has not been used (replay attack prevention)
+      const nonceKey = `${value.tokenId}-${value.nonce}`;
+      if (usedNonces.has(nonceKey)) {
+        return { valid: false, reason: "Proof already used (replay detected)" };
+      }
+
+      // Mark nonce as used with expiration time
+      usedNonces.set(nonceKey, currentTimestamp + PROOF_EXPIRATION_SECONDS + 60); // Keep for 60s after expiry
+
+      return { 
+        valid: true, 
+        signer: recoveredAddress,
+        tokenId: value.tokenId,
+        owner: value.owner
+      };
     } catch (error) {
       console.error("Proof verification error:", error);
       return { valid: false, reason: "Invalid proof format" };
     }
+  }
+
+  /**
+   * Get current proof expiration setting
+   */
+  getProofExpiration() {
+    return PROOF_EXPIRATION_SECONDS;
+  }
+
+  /**
+   * Get nonce storage stats (for monitoring)
+   */
+  getNonceStats() {
+    return {
+      activeNonces: usedNonces.size,
+      expirationSeconds: PROOF_EXPIRATION_SECONDS
+    };
   }
 
   /**

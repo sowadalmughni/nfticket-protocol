@@ -1,22 +1,53 @@
 /**
  * GraphQL Client Configuration
  * Apollo Client setup for querying the NFTicket subgraph
+ * Multi-chain support: Ethereum, Polygon, Base, Arbitrum
  * @author Sowad Al-Mughni
  */
 
 import { ApolloClient, InMemoryCache, gql } from '@apollo/client'
 
+// Chain IDs
+const CHAIN_IDS = {
+  MAINNET: 1,
+  SEPOLIA: 11155111,
+  POLYGON: 137,
+  BASE: 8453,
+  ARBITRUM: 42161,
+  BASE_SEPOLIA: 84532,
+  ARBITRUM_SEPOLIA: 421614,
+  LOCAL: 31337,
+}
+
 // Subgraph endpoints for different networks
+// Update YOUR_ID with your actual Graph Studio deployment IDs
 const SUBGRAPH_URLS = {
-  1: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-mainnet/version/latest',
-  11155111: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-sepolia/version/latest',
-  137: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-polygon/version/latest',
-  31337: 'http://localhost:8000/subgraphs/name/nfticket-protocol', // Local Graph Node
+  // Mainnets
+  [CHAIN_IDS.MAINNET]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-mainnet/version/latest',
+  [CHAIN_IDS.POLYGON]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-polygon/version/latest',
+  [CHAIN_IDS.BASE]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-base/version/latest',
+  [CHAIN_IDS.ARBITRUM]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-arbitrum/version/latest',
+  // Testnets
+  [CHAIN_IDS.SEPOLIA]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-sepolia/version/latest',
+  [CHAIN_IDS.BASE_SEPOLIA]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-base-sepolia/version/latest',
+  [CHAIN_IDS.ARBITRUM_SEPOLIA]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-arbitrum-sepolia/version/latest',
+  // Local development
+  [CHAIN_IDS.LOCAL]: 'http://localhost:8000/subgraphs/name/nfticket-protocol',
+}
+
+// Check if subgraph is available for a chain
+export function isSubgraphAvailable(chainId) {
+  return chainId in SUBGRAPH_URLS
+}
+
+// Get all supported chain IDs
+export function getSupportedChainIds() {
+  return Object.keys(SUBGRAPH_URLS).map(id => parseInt(id))
 }
 
 // Create Apollo Client for a specific chain
 export function createGraphClient(chainId) {
-  const uri = SUBGRAPH_URLS[chainId] || SUBGRAPH_URLS[31337]
+  const uri = SUBGRAPH_URLS[chainId] || SUBGRAPH_URLS[CHAIN_IDS.LOCAL]
   
   return new ApolloClient({
     uri,
@@ -28,6 +59,38 @@ export function createGraphClient(chainId) {
     },
   })
 }
+
+// Multi-chain client manager
+class MultiChainGraphClient {
+  constructor() {
+    this.clients = new Map()
+  }
+
+  getClient(chainId) {
+    if (!this.clients.has(chainId)) {
+      this.clients.set(chainId, createGraphClient(chainId))
+    }
+    return this.clients.get(chainId)
+  }
+
+  // Query across multiple chains
+  async queryAllChains(query, variables = {}) {
+    const chainIds = getSupportedChainIds().filter(id => id !== CHAIN_IDS.LOCAL)
+    const results = await Promise.allSettled(
+      chainIds.map(async (chainId) => {
+        const client = this.getClient(chainId)
+        const result = await client.query({ query, variables })
+        return { chainId, data: result.data }
+      })
+    )
+    
+    return results
+      .filter(r => r.status === 'fulfilled')
+      .map(r => r.value)
+  }
+}
+
+export const multiChainClient = new MultiChainGraphClient()
 
 // GraphQL Queries
 

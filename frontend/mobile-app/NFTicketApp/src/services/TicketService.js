@@ -1,12 +1,16 @@
 /**
  * TicketService
  * Manages NFT ticket interactions and data
+ * Includes rotating QR code generation for anti-screenshot protection
  * @author Sowad Al-Mughni
  */
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useWallet } from './WalletService';
+
+// API Configuration
+const API_BASE_URL = process.env.API_URL || 'http://localhost:3001';
 
 // NFTicket contract ABI (simplified for mobile app)
 const NFT_TICKET_ABI = [
@@ -32,9 +36,15 @@ export const useTickets = () => {
 };
 
 export const TicketProvider = ({ children }) => {
-  const { signer, address, provider } = useWallet();
+  const { signer, address, provider, authToken } = useWallet();
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // Rotating QR state
+  const [activeQRProof, setActiveQRProof] = useState(null);
+  const [qrRefreshing, setQrRefreshing] = useState(false);
+  const refreshIntervalRef = useRef(null);
+  const lastProofTimestampRef = useRef(null);
 
   // Contract addresses (these would be deployed contract addresses)
   const CONTRACT_ADDRESSES = {
@@ -226,6 +236,126 @@ export const TicketProvider = ({ children }) => {
     }
   };
 
+  // ==========================================
+  // ROTATING QR CODE METHODS (Anti-Screenshot)
+  // ==========================================
+
+  /**
+   * Generate a fresh QR proof from the backend
+   * Proofs expire in ~15 seconds for security
+   */
+  const generateQRProof = useCallback(async (tokenId, isRefresh = false) => {
+    if (!authToken) {
+      throw new Error('Not authenticated - please login first');
+    }
+
+    try {
+      setQrRefreshing(true);
+      
+      const endpoint = isRefresh ? '/generate-proof/refresh' : '/generate-proof';
+      const body = { 
+        tokenId,
+        ...(isRefresh && lastProofTimestampRef.current 
+          ? { lastProofTimestamp: lastProofTimestampRef.current } 
+          : {})
+      };
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.reason || error.error || 'Failed to generate proof');
+      }
+
+      const proof = await response.json();
+      lastProofTimestampRef.current = proof.data.timestamp;
+      setActiveQRProof(proof);
+      
+      return proof;
+    } catch (error) {
+      console.error('QR proof generation error:', error);
+      throw error;
+    } finally {
+      setQrRefreshing(false);
+    }
+  }, [authToken]);
+
+  /**
+   * Start auto-refreshing QR code for a ticket
+   * Refreshes every (expiration - 3) seconds to ensure smooth transition
+   */
+  const startQRRotation = useCallback(async (tokenId) => {
+    // Stop any existing rotation
+    stopQRRotation();
+
+    try {
+      // Get initial proof
+      const proof = await generateQRProof(tokenId, false);
+      
+      // Calculate refresh interval (refresh 3 seconds before expiry)
+      const refreshMs = (proof.refreshIn || 12) * 1000;
+
+      // Set up auto-refresh interval
+      refreshIntervalRef.current = setInterval(async () => {
+        try {
+          await generateQRProof(tokenId, true);
+        } catch (error) {
+          console.error('QR auto-refresh failed:', error);
+          // Stop rotation on error - user needs to re-authenticate
+          stopQRRotation();
+        }
+      }, refreshMs);
+
+      console.log(`QR rotation started for token ${tokenId}, refreshing every ${refreshMs}ms`);
+      return proof;
+    } catch (error) {
+      console.error('Failed to start QR rotation:', error);
+      throw error;
+    }
+  }, [generateQRProof]);
+
+  /**
+   * Stop the QR code auto-refresh
+   */
+  const stopQRRotation = useCallback(() => {
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+    setActiveQRProof(null);
+    lastProofTimestampRef.current = null;
+    console.log('QR rotation stopped');
+  }, []);
+
+  /**
+   * Get the current QR proof data as a string for QR code display
+   */
+  const getQRCodeData = useCallback(() => {
+    if (!activeQRProof) return null;
+    
+    // Encode proof as JSON string for QR code
+    return JSON.stringify({
+      data: activeQRProof.data,
+      signature: activeQRProof.signature,
+    });
+  }, [activeQRProof]);
+
+  /**
+   * Check if QR proof is about to expire (within 3 seconds)
+   */
+  const isQRExpiringSoon = useCallback(() => {
+    if (!activeQRProof) return true;
+    const now = Math.floor(Date.now() / 1000);
+    return (activeQRProof.expiresAt - now) < 3;
+  }, [activeQRProof]);
+
   const value = {
     tickets,
     loading,
@@ -234,6 +364,14 @@ export const TicketProvider = ({ children }) => {
     transferTicket,
     getTicketMetadata,
     generateOfflineSignature,
+    // Rotating QR methods
+    activeQRProof,
+    qrRefreshing,
+    generateQRProof,
+    startQRRotation,
+    stopQRRotation,
+    getQRCodeData,
+    isQRExpiringSoon,
   };
 
   return (
