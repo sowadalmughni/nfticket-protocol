@@ -1,0 +1,129 @@
+# ============================================
+# NFTicket Protocol - Docker Compose
+# Development and Production deployment
+# ============================================
+
+version: '3.8'
+
+services:
+  # ===================
+  # Backend API Service
+  # ===================
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nfticket-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-3001}:3001"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=3001
+      - SIGNER_PRIVATE_KEY=${SIGNER_PRIVATE_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - CHAIN_ID=${CHAIN_ID:-137}
+      # Redis
+      - REDIS_URL=redis://redis:6379
+      # RPC URLs
+      - RPC_URL_POLYGON=${RPC_URL_POLYGON:-https://rpc.ankr.com/polygon}
+      - RPC_URL_SEPOLIA=${RPC_URL_SEPOLIA:-https://rpc.ankr.com/eth_sepolia}
+      # Contract Addresses
+      - CONTRACT_POLYGON=${CONTRACT_POLYGON}
+      - CONTRACT_SEPOLIA=${CONTRACT_SEPOLIA}
+      # Stripe
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      # Firebase
+      - FCM_SERVER_KEY=${FCM_SERVER_KEY}
+      # Frontend URL (for CORS and redirects)
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - nfticket-network
+
+  # ===================
+  # Redis (Nonce Storage)
+  # ===================
+  redis:
+    image: redis:7-alpine
+    container_name: nfticket-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nfticket-network
+
+  # ===================
+  # Frontend Dashboard
+  # ===================
+  dashboard:
+    build:
+      context: ./frontend/nfticket-dashboard
+      dockerfile: Dockerfile
+    container_name: nfticket-dashboard
+    restart: unless-stopped
+    ports:
+      - "${DASHBOARD_PORT:-5173}:80"
+    environment:
+      - VITE_API_URL=http://api:3001
+      - VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID}
+      - VITE_CONTRACT_POLYGON_NFTICKET=${CONTRACT_POLYGON}
+      - VITE_CONTRACT_SEPOLIA_NFTICKET=${CONTRACT_SEPOLIA}
+      - VITE_SEATSIO_PUBLIC_KEY=${VITE_SEATSIO_PUBLIC_KEY}
+      - VITE_STRIPE_PUBLISHABLE_KEY=${VITE_STRIPE_PUBLISHABLE_KEY}
+    depends_on:
+      - api
+    networks:
+      - nfticket-network
+
+  # ===================
+  # Graph Node (Optional - Self-hosted subgraph)
+  # ===================
+  # Uncomment if you want to self-host The Graph
+  # graph-node:
+  #   image: graphprotocol/graph-node:latest
+  #   container_name: nfticket-graph
+  #   ports:
+  #     - "8000:8000"
+  #     - "8001:8001"
+  #     - "8020:8020"
+  #     - "8030:8030"
+  #     - "8040:8040"
+  #   environment:
+  #     postgres_host: postgres
+  #     postgres_user: graph-node
+  #     postgres_pass: let-me-in
+  #     postgres_db: graph-node
+  #     ipfs: 'ipfs:5001'
+  #     ethereum: 'polygon:${RPC_URL_POLYGON}'
+  #     GRAPH_LOG: info
+  #   depends_on:
+  #     - ipfs
+  #     - postgres
+  #   networks:
+  #     - nfticket-network
+
+networks:
+  nfticket-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

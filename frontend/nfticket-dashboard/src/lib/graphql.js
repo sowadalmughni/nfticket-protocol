@@ -12,6 +12,7 @@ const CHAIN_IDS = {
   MAINNET: 1,
   SEPOLIA: 11155111,
   POLYGON: 137,
+  POLYGON_AMOY: 80002,
   BASE: 8453,
   ARBITRUM: 42161,
   BASE_SEPOLIA: 84532,
@@ -20,24 +21,30 @@ const CHAIN_IDS = {
 }
 
 // Subgraph endpoints for different networks
-// Update YOUR_ID with your actual Graph Studio deployment IDs
+// Configure via environment variables (see .env.example)
 const SUBGRAPH_URLS = {
   // Mainnets
-  [CHAIN_IDS.MAINNET]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-mainnet/version/latest',
-  [CHAIN_IDS.POLYGON]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-polygon/version/latest',
-  [CHAIN_IDS.BASE]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-base/version/latest',
-  [CHAIN_IDS.ARBITRUM]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-arbitrum/version/latest',
+  [CHAIN_IDS.MAINNET]: import.meta.env.VITE_SUBGRAPH_MAINNET || '',
+  [CHAIN_IDS.POLYGON]: import.meta.env.VITE_SUBGRAPH_POLYGON || '',
+  [CHAIN_IDS.BASE]: import.meta.env.VITE_SUBGRAPH_BASE || '',
+  [CHAIN_IDS.ARBITRUM]: import.meta.env.VITE_SUBGRAPH_ARBITRUM || '',
   // Testnets
-  [CHAIN_IDS.SEPOLIA]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-sepolia/version/latest',
-  [CHAIN_IDS.BASE_SEPOLIA]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-base-sepolia/version/latest',
-  [CHAIN_IDS.ARBITRUM_SEPOLIA]: 'https://api.studio.thegraph.com/query/YOUR_ID/nfticket-arbitrum-sepolia/version/latest',
+  [CHAIN_IDS.SEPOLIA]: import.meta.env.VITE_SUBGRAPH_SEPOLIA || '',
+  [CHAIN_IDS.POLYGON_AMOY]: import.meta.env.VITE_SUBGRAPH_AMOY || '',
+  [CHAIN_IDS.BASE_SEPOLIA]: import.meta.env.VITE_SUBGRAPH_BASE_SEPOLIA || '',
+  [CHAIN_IDS.ARBITRUM_SEPOLIA]: import.meta.env.VITE_SUBGRAPH_ARBITRUM_SEPOLIA || '',
   // Local development
-  [CHAIN_IDS.LOCAL]: 'http://localhost:8000/subgraphs/name/nfticket-protocol',
+  [CHAIN_IDS.LOCAL]: import.meta.env.VITE_SUBGRAPH_LOCAL || 'http://localhost:8000/subgraphs/name/nfticket-protocol',
 }
 
 // Check if subgraph is available for a chain
 export function isSubgraphAvailable(chainId) {
-  return chainId in SUBGRAPH_URLS
+  return chainId in SUBGRAPH_URLS && !!SUBGRAPH_URLS[chainId]
+}
+
+// Check if any subgraph is configured
+export function isAnySubgraphConfigured() {
+  return Object.values(SUBGRAPH_URLS).some(url => url && !url.includes('YOUR_ID'))
 }
 
 // Get all supported chain IDs

@@ -14,7 +14,8 @@ import {
   TicketIcon,
   CogIcon,
   EyeIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  Squares2X2Icon
 } from '@heroicons/react/24/outline'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -23,11 +24,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { SeatingChart, SeatSelectionSummary, useSeatSelection } from '@/components'
 import NFTicketArtifact from '../lib/abis/NFTicket.json'
+
+// Check if seats.io is configured
+const SEATSIO_ENABLED = !!import.meta.env.VITE_SEATSIO_PUBLIC_KEY
 
 export function Events() {
   const { address, isConnected } = useAccount()
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [showSeatMapDialog, setShowSeatMapDialog] = useState(false)
+  const [selectedEvent, setSelectedEvent] = useState(null)
   const [events, setEvents] = useState([]) // Local state for demo, ideally fetched from Subgraph
   const [newEvent, setNewEvent] = useState({
     name: '',
@@ -36,7 +43,11 @@ export function Events() {
     venue: '',
     royaltyCap: 5,
     maxPrice: '',
+    seatsioChartKey: '', // Optional seats.io chart key
   })
+  
+  // Seat selection hook for purchase flow
+  const seatSelection = useSeatSelection()
 
   // Contract Deployment Hook
   const { 
@@ -78,6 +89,7 @@ export function Events() {
         venue: '',
         royaltyCap: 5,
         maxPrice: '',
+        seatsioChartKey: '',
       })
     }
   }, [isDeploymentSuccess, receipt])
@@ -325,12 +337,63 @@ export function Events() {
                     <TicketIcon className="h-4 w-4 mr-1" />
                     Mint Tickets
                   </Button>
+                  {SEATSIO_ENABLED && event.seatsioChartKey && (
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedEvent(event)
+                        setShowSeatMapDialog(true)
+                      }}
+                    >
+                      <Squares2X2Icon className="h-4 w-4 mr-1" />
+                      Seat Map
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Seat Map Dialog */}
+      <Dialog open={showSeatMapDialog} onOpenChange={setShowSeatMapDialog}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Select Seats - {selectedEvent?.name}</DialogTitle>
+            <DialogDescription>
+              Click on seats to select them for purchase
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-2">
+              {selectedEvent?.seatsioChartKey && (
+                <SeatingChart
+                  chartKey={selectedEvent.seatsioChartKey}
+                  eventKey={selectedEvent.seatsioEventKey}
+                  onSeatSelected={seatSelection.handleSeatSelected}
+                  onSeatDeselected={seatSelection.handleSeatDeselected}
+                  onSelectionValid={seatSelection.handleSelectionValid}
+                  onSelectionInvalid={seatSelection.handleSelectionInvalid}
+                  maxSelectedObjects={10}
+                  className="min-h-[400px]"
+                />
+              )}
+            </div>
+            <div>
+              <SeatSelectionSummary
+                selectedSeats={seatSelection.selectedSeats}
+                onCheckout={(seats) => {
+                  console.log('Checkout with seats:', seats)
+                  // TODO: Integrate with Stripe checkout
+                  setShowSeatMapDialog(false)
+                }}
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

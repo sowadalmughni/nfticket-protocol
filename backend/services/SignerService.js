@@ -1,4 +1,5 @@
 const { ethers } = require("ethers");
+const nonceStorage = require("./NonceStorage");
 
 // Configuration - REQUIRED environment variables
 if (!process.env.SIGNER_PRIVATE_KEY) {
@@ -6,6 +7,15 @@ if (!process.env.SIGNER_PRIVATE_KEY) {
 }
 const PRIVATE_KEY = process.env.SIGNER_PRIVATE_KEY;
 const DEFAULT_CHAIN_ID = parseInt(process.env.CHAIN_ID || "11155111"); // Default to Sepolia
+
+// Initialize Redis connection (async, falls back to in-memory)
+nonceStorage.initRedis().then(connected => {
+  if (connected) {
+    console.log('[SignerService] Using Redis for nonce storage');
+  } else {
+    console.log('[SignerService] Using in-memory nonce storage (development mode)');
+  }
+});
 
 // Multi-chain RPC Configuration
 const RPC_URLS = {
@@ -33,7 +43,6 @@ const CONTRACT_ADDRESSES = {
 
 // Rotating QR Configuration
 const PROOF_EXPIRATION_SECONDS = parseInt(process.env.PROOF_EXPIRATION || "15"); // 15 seconds for rotating QR
-const NONCE_CLEANUP_INTERVAL = 60000; // Clean expired nonces every 60 seconds
 
 const wallet = new ethers.Wallet(PRIVATE_KEY);
 
@@ -48,9 +57,6 @@ function getProvider(chainId) {
   }
   return providers.get(chainId);
 }
-
-// Nonce storage for replay attack prevention (in-memory Map, use Redis in production)
-const usedNonces = new Map(); // Map<nonce, expiresAt>
 
 // NFTicket contract ABI (minimal for ownership verification)
 const NFTICKET_ABI = [
@@ -80,21 +86,6 @@ const TYPES = {
     { name: "nonce", type: "uint256" }
   ]
 };
-
-// Cleanup expired nonces periodically to prevent memory leak
-setInterval(() => {
-  const now = Math.floor(Date.now() / 1000);
-  let cleaned = 0;
-  for (const [nonce, expiresAt] of usedNonces.entries()) {
-    if (expiresAt < now) {
-      usedNonces.delete(nonce);
-      cleaned++;
-    }
-  }
-  if (cleaned > 0) {
-    console.log(`[SignerService] Cleaned ${cleaned} expired nonces. Active: ${usedNonces.size}`);
-  }
-}, NONCE_CLEANUP_INTERVAL);
 
 class SignerService {
   constructor() {
@@ -234,8 +225,9 @@ class SignerService {
 
   /**
    * Verify a ticket proof signature, expiration, and nonce (replay prevention)
+   * Now uses persistent NonceStorage (Redis or in-memory fallback)
    */
-  verifyTicketProof(value, signature) {
+  async verifyTicketProof(value, signature) {
     try {
       const recoveredAddress = ethers.verifyTypedData(DOMAIN, TYPES, value, signature);
       
@@ -252,12 +244,14 @@ class SignerService {
 
       // Check 3: Nonce has not been used (replay attack prevention)
       const nonceKey = `${value.tokenId}-${value.nonce}`;
-      if (usedNonces.has(nonceKey)) {
+      const alreadyUsed = await nonceStorage.isNonceUsed(nonceKey);
+      if (alreadyUsed) {
         return { valid: false, reason: "Proof already used (replay detected)" };
       }
 
       // Mark nonce as used with expiration time
-      usedNonces.set(nonceKey, currentTimestamp + PROOF_EXPIRATION_SECONDS + 60); // Keep for 60s after expiry
+      const expiresAt = currentTimestamp + PROOF_EXPIRATION_SECONDS + 60; // Keep for 60s after expiry
+      await nonceStorage.markNonceUsed(nonceKey, expiresAt);
 
       return { 
         valid: true, 
@@ -281,9 +275,10 @@ class SignerService {
   /**
    * Get nonce storage stats (for monitoring)
    */
-  getNonceStats() {
+  async getNonceStats() {
+    const stats = await nonceStorage.getStats();
     return {
-      activeNonces: usedNonces.size,
+      ...stats,
       expirationSeconds: PROOF_EXPIRATION_SECONDS
     };
   }

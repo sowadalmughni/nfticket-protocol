@@ -99,7 +99,7 @@ app.get('/auth/nonce', (req, res) => {
 });
 
 // Endpoint for the mobile scanner to verify a QR code (public endpoint)
-app.post('/verify', (req, res) => {
+app.post('/verify', async (req, res) => {
   const { data, signature } = req.body;
 
   if (!data || !signature) {
@@ -107,7 +107,7 @@ app.post('/verify', (req, res) => {
   }
 
   try {
-    const result = signerService.verifyTicketProof(data, signature);
+    const result = await signerService.verifyTicketProof(data, signature);
     
     if (result.valid) {
       res.json({ success: true, message: "Ticket Valid", signer: result.signer });

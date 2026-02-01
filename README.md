@@ -45,13 +45,48 @@ graph TD
 
 | Component | Technology | Description |
 |-----------|------------|-------------|
-| **Smart Contracts** | Solidity, Hardhat, OpenZeppelin | Core logic, ERC-721 extensions, AccessControl |
+| **Smart Contracts** | Solidity 0.8.24, Hardhat, OpenZeppelin | Core logic, ERC-721 extensions, AccessControl |
 | **Web3 Integration** | Viem, Wagmi, Ethers.js | Blockchain interaction and wallet management |
-| **Frontend** | React, Tailwind CSS | Responsive dashboard for organizers and users |
+| **Frontend** | React + Vite, Tailwind CSS, shadcn/ui | Responsive dashboard for organizers and users |
 | **Mobile** | React Native | Cross-platform wallet and ticket viewer |
 | **Indexing** | The Graph Protocol | Decentralized querying of on-chain data |
 | **Backend API** | Express.js | Off-chain signature verification and proof generation |
-| **Testing** | Hardhat Test Suite | Comprehensive unit and integration testing |
+| **Payments** | Stripe | Fiat-to-crypto ticket purchases |
+| **Seat Selection** | seats.io | Interactive venue seat maps |
+| **Caching** | Redis | Persistent nonce storage for QR verification |
+| **Deployment** | Docker, Docker Compose | Production containerization |
+| **Testing** | Hardhat, Mocha, Chai | Comprehensive unit and integration testing |
+
+## 🔗 Multi-Chain Support
+
+NFTicket Protocol supports deployment across multiple EVM-compatible chains:
+
+| Network | Chain ID | Status | Use Case |
+|---------|----------|--------|----------|
+| **Polygon** | 137 | ✅ Primary | Low gas fees, fast confirmations |
+| **Polygon Amoy** | 80002 | ✅ Testnet | Development and testing |
+| **Ethereum** | 1 | ✅ Supported | High-value events |
+| **Sepolia** | 11155111 | ✅ Testnet | Development and testing |
+| **Base** | 8453 | ✅ Supported | Coinbase ecosystem |
+| **Arbitrum** | 42161 | ✅ Supported | Low fees with Ethereum security |
+
+### Deploying to Different Networks
+
+```bash
+cd backend
+
+# Deploy to Polygon (recommended for production)
+npm run deploy:polygon
+
+# Deploy to Sepolia testnet
+npm run deploy:sepolia
+
+# Deploy to Base
+npm run deploy:base
+
+# Deploy to Arbitrum
+npm run deploy:arbitrum
+```
 
 ## 🚀 Quick Start
 
@@ -155,18 +190,143 @@ nfticket-protocol/
 
 ## 🔧 Configuration
 
-**Environment Variables**: Create a `.env` file in `backend/` based on the example.
+### Backend Environment Variables
+
+Create a `.env` file in `backend/` based on `.env.example`:
 
 ```env
-PRIVATE_KEY=your_wallet_private_key
-SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/your_api_key
+# Required - Wallet private key for signing
+SIGNER_PRIVATE_KEY=your_wallet_private_key
+
+# Required - JWT secret for API authentication
+JWT_SECRET=your_secure_jwt_secret_at_least_32_chars
+
+# RPC URLs (defaults provided, but recommended to use your own)
+RPC_URL_POLYGON=https://polygon-rpc.com
+RPC_URL_MAINNET=https://rpc.ankr.com/eth
+RPC_URL_SEPOLIA=https://rpc.ankr.com/eth_sepolia
+
+# Stripe Integration (required for fiat payments)
+STRIPE_SECRET_KEY=sk_live_your_stripe_secret_key
+STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+
+# Redis (optional - falls back to in-memory in development)
+REDIS_URL=redis://localhost:6379
+
+# Contract verification
 ETHERSCAN_API_KEY=your_etherscan_key
+POLYGONSCAN_API_KEY=your_polygonscan_key
 ```
 
-**Contract Parameters**:
+### Dashboard Environment Variables
+
+Create a `.env` file in `frontend/nfticket-dashboard/`:
+
+```env
+# Contract addresses (from deployment)
+VITE_CONTRACT_ADDRESS=0xYourNFTicketContractAddress
+VITE_POAP_CONTRACT_ADDRESS=0xYourPOAPContractAddress
+VITE_LOYALTY_CONTRACT_ADDRESS=0xYourLoyaltyContractAddress
+
+# Subgraph URLs (from The Graph deployment)
+VITE_SUBGRAPH_POLYGON=https://api.thegraph.com/subgraphs/name/your-org/nfticket-polygon
+VITE_SUBGRAPH_SEPOLIA=https://api.thegraph.com/subgraphs/name/your-org/nfticket-sepolia
+
+# seats.io (for seat selection)
+VITE_SEATSIO_PUBLIC_KEY=your_seatsio_public_workspace_key
+
+# WalletConnect (optional)
+VITE_WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
+```
+
+### Contract Parameters
+
 Adjust default values in `scripts/deploy.js` to customize:
 - `Royalty Cap` (Default: 500 basis points = 5%)
 - `Max Price` (Default: 1 ETH)
+
+## 💳 Stripe Payment Integration
+
+NFTicket supports fiat-to-crypto ticket purchases via Stripe:
+
+### Setup
+
+1. Create a [Stripe account](https://stripe.com)
+2. Get your API keys from the Stripe Dashboard
+3. Set up webhooks pointing to `/api/payments/webhook`
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/payments/create-checkout-session` | POST | Create Stripe checkout session |
+| `/api/payments/webhook` | POST | Handle Stripe webhook events |
+| `/api/payments/session/:sessionId` | GET | Get session status |
+
+### Flow
+
+1. User selects tickets → Frontend calls `create-checkout-session`
+2. User redirected to Stripe Checkout
+3. On success, webhook triggers → Backend mints NFT to user's wallet
+
+## 🪑 Seat Selection (seats.io)
+
+Interactive venue seat selection powered by [seats.io](https://seats.io):
+
+### Setup
+
+1. Create a seats.io account and workspace
+2. Design your venue chart in the seats.io designer
+3. Add your public key to environment variables
+
+### Usage
+
+```jsx
+import { SeatingChart, useSeatSelection } from '@/components/SeatingChart'
+
+function EventPage({ eventId }) {
+  const { selectedSeats, totalPrice, clearSelection } = useSeatSelection()
+  
+  return (
+    <SeatingChart
+      eventId={eventId}
+      onSelectionChange={(seats) => console.log(seats)}
+    />
+  )
+}
+```
+
+## 🐳 Docker Deployment
+
+Production deployment with Docker Compose:
+
+### Quick Start
+
+```bash
+# Build and start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| `api` | 3000 | Backend API server |
+| `dashboard` | 80 | Frontend dashboard (nginx) |
+| `redis` | 6379 | Nonce storage cache |
+
+### Production Configuration
+
+1. Copy `.env.example` files and configure for production
+2. Set `NODE_ENV=production`
+3. Use a reverse proxy (nginx/Traefik) for SSL termination
+4. Configure Redis persistence for nonce storage
 
 ## 🤝 Contributing
 
