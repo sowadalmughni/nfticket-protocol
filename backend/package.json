@@ -70,8 +70,10 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.1",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.1",
-    "ethers": "^6.10.0"
+    "ethers": "^6.10.0",
+    "express": "^5.2.1"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -94,4 +96,3 @@
     "mobile-app/NFTicketApp"
   ]
 }
-

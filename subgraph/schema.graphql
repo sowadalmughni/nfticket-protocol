@@ -1,0 +1,43 @@
+type Ticket @entity {
+  id: ID!
+  tokenId: BigInt!
+  owner: Account!
+  uri: String!
+  isUsed: Boolean!
+  originalPrice: BigInt!
+  price: BigInt
+  transfers: [Transfer!]! @derivedFrom(field: "ticket")
+}
+
+type Account @entity {
+  id: ID! # Wallet address
+  tickets: [Ticket!]! @derivedFrom(field: "owner")
+  marketplacesApproved: [MarketplaceApproval!]! @derivedFrom(field: "account")
+}
+
+type Transfer @entity {
+  id: ID!
+  ticket: Ticket!
+  from: Account!
+  to: Account!
+  price: BigInt!
+  royaltyAmount: BigInt!
+  transactionHash: Bytes!
+  timestamp: BigInt!
+}
+
+type MarketplaceApproval @entity {
+  id: ID!
+  account: Account!
+  marketplace: Bytes!
+  isApproved: Boolean!
+  timestamp: BigInt!
+}
+
+type ProtocolStats @entity {
+  id: ID!
+  totalTicketsMinted: BigInt!
+  totalTicketsUsed: BigInt!
+  totalVolume: BigInt!
+  totalRoyalties: BigInt!
+}
