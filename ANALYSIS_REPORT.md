@@ -212,10 +212,10 @@ NFTicket Protocol is a promising NFT ticketing solution with solid smart contrac
 
 | Priority | Task | Effort | Status |
 |----------|------|--------|--------|
-| 🟠 High | Add backend authentication | 4-6 hours | ⬜ Todo |
-| 🟠 High | Implement on-chain verification | 4-6 hours | ⬜ Todo |
-| 🟠 High | Complete dashboard pages | 2-3 days | ⬜ Todo |
-| 🟠 High | Connect dashboard to subgraph | 1-2 days | ⬜ Todo |
+| 🟠 High | Add backend authentication | 4-6 hours | ✅ Done |
+| 🟠 High | Implement on-chain verification | 4-6 hours | ✅ Done |
+| 🟠 High | Complete dashboard pages | 2-3 days | ✅ Done |
+| 🟠 High | Connect dashboard to subgraph | 1-2 days | ✅ Done |
 
 ### Phase 3: Competitive Features (Week 4-6)
 
