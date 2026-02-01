@@ -1,0 +1,35 @@
+name: NFTicket CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Compile Contracts
+        run: npm run compile --workspace=backend
+
+      - name: Run Backend Tests
+        run: npm run test --workspace=backend
+        env:
+          REPORT_GAS: false
+
+      - name: Lint Codebase
+        run: npm run lint --if-present
