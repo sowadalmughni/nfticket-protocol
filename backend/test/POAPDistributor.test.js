@@ -33,6 +33,7 @@ describe("POAPDistributor", function () {
       0,
       owner.address
     );
+    await nfticket.waitForDeployment();
 
     POAPDistributor = await ethers.getContractFactory("POAPDistributor");
     poapDistributor = await POAPDistributor.deploy(
@@ -43,6 +44,7 @@ describe("POAPDistributor", function () {
       baseTokenURI,
       maxSupply
     );
+    await poapDistributor.waitForDeployment();
 
     // Grant minter and distributor roles
     const MINTER_ROLE = await poapDistributor.MINTER_ROLE();
@@ -87,9 +89,10 @@ describe("POAPDistributor", function () {
       // Mint an NFTicket to claimer1
       const nfticketTokenId = 0;
       await nfticket.connect(owner).mintTicket(claimer1.address, "https://example.com/nfticket/0", ethers.parseEther("0.1"));
+      const nfticketAddress = await nfticket.getAddress();
 
       await expect(
-        poapDistributor.connect(distributor).claimPOAP(claimer1.address, nfticket.address, nfticketTokenId)
+        poapDistributor.connect(distributor).claimPOAP(claimer1.address, nfticketAddress, nfticketTokenId)
       )
         .to.emit(poapDistributor, "POAPClaimed")
         .withArgs(claimer1.address, 0);
@@ -165,9 +168,10 @@ describe("POAPDistributor", function () {
       // Mint an NFTicket to claimer2, but claimer1 tries to use it
       const nfticketTokenId = 0;
       await nfticket.connect(owner).mintTicket(claimer2.address, "https://example.com/nfticket/0", ethers.parseEther("0.1"));
+      const nfticketAddress = await nfticket.getAddress();
 
       await expect(
-        poapDistributor.connect(distributor).claimPOAP(claimer1.address, nfticket.address, nfticketTokenId)
+        poapDistributor.connect(distributor).claimPOAP(claimer1.address, nfticketAddress, nfticketTokenId)
       )
         .to.be.revertedWith("POAP: claimer does not own the specified ticket");
     });
@@ -210,11 +214,11 @@ describe("POAPDistributor", function () {
 
     it("Should prevent non-admin from calling admin functions", async function () {
       await expect(poapDistributor.connect(claimer1).setDistributionActive(false))
-        .to.be.revertedWith("AccessControl:");
+        .to.be.revertedWithCustomError(poapDistributor, "AccessControlUnauthorizedAccount");
       await expect(poapDistributor.connect(claimer1).setMaxSupply(20))
-        .to.be.revertedWith("AccessControl:");
+        .to.be.revertedWithCustomError(poapDistributor, "AccessControlUnauthorizedAccount");
       await expect(poapDistributor.connect(claimer1).setBaseTokenURI("test"))
-        .to.be.revertedWith("AccessControl:");
+        .to.be.revertedWithCustomError(poapDistributor, "AccessControlUnauthorizedAccount");
     });
   });
 
@@ -224,13 +228,13 @@ describe("POAPDistributor", function () {
       const tokenId = 0;
 
       await expect(poapDistributor.connect(claimer1).transferFrom(claimer1.address, claimer2.address, tokenId))
-        .to.be.revertedWith("POAP: POAPs are soulbound and cannot be transferred");
+        .to.be.revertedWith("POAP: tokens are soulbound and cannot be transferred");
 
       await expect(poapDistributor.connect(claimer1).approve(claimer2.address, tokenId))
         .to.not.be.reverted; // Approve should still work, but transfer will fail
 
       await expect(poapDistributor.connect(claimer2).transferFrom(claimer1.address, claimer2.address, tokenId))
-        .to.be.revertedWith("POAP: POAPs are soulbound and cannot be transferred");
+        .to.be.revertedWith("POAP: tokens are soulbound and cannot be transferred");
     });
   });
 });

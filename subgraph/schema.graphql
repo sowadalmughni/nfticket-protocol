@@ -1,4 +1,4 @@
-type Ticket @entity(immutable: false) {
+type Ticket @entity {
   id: ID!
   tokenId: BigInt!
   owner: Account!
@@ -9,13 +9,13 @@ type Ticket @entity(immutable: false) {
   transfers: [Transfer!]! @derivedFrom(field: "ticket")
 }
 
-type Account @entity(immutable: false) {
+type Account @entity {
   id: ID! # Wallet address
   tickets: [Ticket!]! @derivedFrom(field: "owner")
   marketplacesApproved: [MarketplaceApproval!]! @derivedFrom(field: "account")
 }
 
-type Transfer @entity(immutable: true) {
+type Transfer @entity {
   id: ID!
   ticket: Ticket!
   from: Account!
@@ -26,7 +26,7 @@ type Transfer @entity(immutable: true) {
   timestamp: BigInt!
 }
 
-type MarketplaceApproval @entity(immutable: true) {
+type MarketplaceApproval @entity {
   id: ID!
   account: Account!
   marketplace: Bytes!
@@ -34,7 +34,7 @@ type MarketplaceApproval @entity(immutable: true) {
   timestamp: BigInt!
 }
 
-type ProtocolStats @entity(immutable: false) {
+type ProtocolStats @entity {
   id: ID!
   totalTicketsMinted: BigInt!
   totalTicketsUsed: BigInt!

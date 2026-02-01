@@ -12,7 +12,8 @@ async function main() {
   // Get the deployer account
   const [deployer] = await ethers.getSigners();
   console.log("📝 Deploying contracts with account:", deployer.address);
-  console.log("💰 Account balance:", ethers.utils.formatEther(await deployer.getBalance()), "ETH\n");
+  const balance = await ethers.provider.getBalance(deployer.address);
+  console.log("💰 Account balance:", ethers.formatEther(balance), "ETH\n");
 
   // NFTicket contract parameters
   const eventName = "Web3 Conference 2024";
@@ -20,7 +21,7 @@ async function main() {
   const eventDate = Math.floor(Date.now() / 1000) + (30 * 24 * 60 * 60); // 30 days from now
   const venue = "Convention Center, San Francisco";
   const royaltyCap = 500; // 5% in basis points
-  const maxPrice = ethers.utils.parseEther("1.0"); // 1 ETH max price
+  const maxPrice = ethers.parseEther("1.0"); // 1 ETH max price
   const royaltyRecipient = deployer.address;
 
   console.log("🎫 NFTicket Contract Parameters:");
@@ -46,9 +47,10 @@ async function main() {
     royaltyRecipient
   );
 
-  await nfticket.deployed();
-  console.log("✅ NFTicket deployed to:", nfticket.address);
-  console.log("🔗 Transaction hash:", nfticket.deployTransaction.hash);
+  await nfticket.waitForDeployment();
+  const nfticketAddress = await nfticket.getAddress();
+  console.log("✅ NFTicket deployed to:", nfticketAddress);
+  console.log("🔗 Transaction hash:", nfticket.deploymentTransaction().hash);
   console.log();
 
   // POAP contract parameters
@@ -74,13 +76,14 @@ async function main() {
     poapEventDescription,
     eventDate,
     poapLocation,
-    maxSupply,
-    baseTokenURI
+    baseTokenURI,
+    maxSupply
   );
 
-  await poapDistributor.deployed();
-  console.log("✅ POAPDistributor deployed to:", poapDistributor.address);
-  console.log("🔗 Transaction hash:", poapDistributor.deployTransaction.hash);
+  await poapDistributor.waitForDeployment();
+  const poapDistributorAddress = await poapDistributor.getAddress();
+  console.log("✅ POAPDistributor deployed to:", poapDistributorAddress);
+  console.log("🔗 Transaction hash:", poapDistributor.deploymentTransaction().hash);
   console.log();
 
   // Verify deployment by calling contract functions

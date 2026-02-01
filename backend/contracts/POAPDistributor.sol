@@ -239,8 +239,23 @@ contract POAPDistributor is ERC721, ERC721URIStorage, AccessControl, ReentrancyG
     }
 
     /**
-     * @dev Disable transfers to make POAPs soulbound (non-transferable)
+     * @dev Override _update to make POAPs soulbound (non-transferable)
+     * POAPs can only be minted (from == address(0)), not transferred
      */
+    function _update(address to, uint256 tokenId, address auth)
+        internal
+        override(ERC721)
+        returns (address)
+    {
+        address from = _ownerOf(tokenId);
+        
+        // Allow minting (from == address(0)) but block all transfers
+        if (from != address(0) && to != address(0)) {
+            revert("POAP: tokens are soulbound and cannot be transferred");
+        }
+        
+        return super._update(to, tokenId, auth);
+    }
 
 }
 
