@@ -30,8 +30,12 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
     string public eventVenue;
 
     // Ticket tracking
+    // Ticket tracking
     mapping(uint256 => bool) public ticketUsed; // Track if ticket has been used for entry
     mapping(uint256 => uint256) public originalPrice; // Track original sale price
+
+    mapping(address => bool) public approvedMarketplaces;
+    bool private _isInternalTransfer;
 
     // Events
     event TicketMinted(uint256 indexed tokenId, address indexed to, string uri);
@@ -40,6 +44,7 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
     event RoyaltyCapUpdated(uint256 newRoyaltyCap);
     event MaxPriceUpdated(uint256 newMaxPrice);
     event RoyaltyRecipientUpdated(address newRecipient);
+    event MarketplaceApprovalUpdated(address indexed marketplace, bool approved);
 
     constructor(
         string memory _eventName,
@@ -130,7 +135,9 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
             emit TicketTransferred(tokenId, from, to, salePrice, royaltyAmount);
         }
 
+        _isInternalTransfer = true;
         _transfer(from, to, tokenId);
+        _isInternalTransfer = false;
     }
 
     /**
@@ -173,6 +180,16 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
         require(_royaltyRecipient != address(0), "NFTicket: royalty recipient cannot be zero address");
         royaltyRecipient = _royaltyRecipient;
         emit RoyaltyRecipientUpdated(_royaltyRecipient);
+    }
+
+    /**
+     * @dev Set approved marketplace status (admin only)
+     * @param marketplace Address of the marketplace
+     * @param approved Approval status
+     */
+    function setApprovedMarketplace(address marketplace, bool approved) public onlyRole(ADMIN_ROLE) {
+        approvedMarketplaces[marketplace] = approved;
+        emit MarketplaceApprovalUpdated(marketplace, approved);
     }
 
     /**
@@ -226,7 +243,7 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
         return super.supportsInterface(interfaceId);
     }
 
-    // Internal function to prevent transfer of used tickets
+    // Internal function to prevent transfers unless authorized or strictly internal
     function _update(address to, uint256 tokenId, address auth)
         internal
         override(ERC721)
@@ -235,6 +252,16 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
         if (to != address(0)) {
             require(!ticketUsed[tokenId], "NFTicket: cannot transfer used ticket");
         }
+        
+        // Allow minting (from == 0) and burning (to == 0)
+        address from = _ownerOf(tokenId);
+        if (from != address(0) && to != address(0)) {
+            require(
+                _isInternalTransfer || approvedMarketplaces[msg.sender],
+                "NFTicket: transfers restricted to approved marketplaces"
+            );
+        }
+
         return super._update(to, tokenId, auth);
     }
 }

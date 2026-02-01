@@ -210,6 +210,58 @@ describe("NFTicket", function () {
     });
   });
 
+  describe("Restricted Transfers", function () {
+    let tokenId;
+
+    beforeEach(async function () {
+      const tokenURI = "https://example.com/token/restricted";
+      tokenId = 0;
+      await nfticket.connect(minter).mintTicket(buyer.address, tokenURI, originalPrice);
+    });
+
+    it("Should fail if user tries to transfer via transferFrom (OpenSea bypass)", async function () {
+      await nfticket.connect(buyer).approve(reseller.address, tokenId);
+      
+      await expect(
+        nfticket.connect(reseller).transferFrom(buyer.address, reseller.address, tokenId)
+      ).to.be.revertedWith("NFTicket: transfers restricted to approved marketplaces");
+    });
+
+    it("Should fail if user tries to transfer via safeTransferFrom", async function () {
+      await nfticket.connect(buyer).approve(reseller.address, tokenId);
+      
+      await expect(
+        nfticket.connect(reseller)["safeTransferFrom(address,address,uint256)"](buyer.address, reseller.address, tokenId)
+      ).to.be.revertedWith("NFTicket: transfers restricted to approved marketplaces");
+    });
+
+    it("Should allow transfer if sender is an approved marketplace", async function () {
+      // Approve reseller as a marketplace for testing
+      await nfticket.setApprovedMarketplace(reseller.address, true);
+      
+      await nfticket.connect(buyer).approve(reseller.address, tokenId);
+      
+      await expect(
+        nfticket.connect(reseller).transferFrom(buyer.address, reseller.address, tokenId)
+      ).to.not.be.reverted;
+
+      expect(await nfticket.ownerOf(tokenId)).to.equal(reseller.address);
+    });
+
+    it("Should still allow transferWithPrice (internal mechanism)", async function () {
+      await nfticket.connect(buyer).approve(reseller.address, tokenId);
+      const salePrice = ethers.parseEther("0.5");
+
+      await expect(
+        nfticket.connect(reseller).transferWithPrice(buyer.address, reseller.address, tokenId, salePrice, {
+           value: salePrice 
+        })
+      ).to.not.be.reverted;
+
+      expect(await nfticket.ownerOf(tokenId)).to.equal(reseller.address);
+    });
+  });
+
   describe("Admin Functions", function () {
     it("Should update royalty cap", async function () {
       const newRoyaltyCap = 1000; // 10%
@@ -262,6 +314,19 @@ describe("NFTicket", function () {
 
       await expect(nfticket.connect(buyer).setRoyaltyRecipient(addrs[0].address))
         .to.be.revertedWith("AccessControl:");
+        
+      await expect(nfticket.connect(buyer).setApprovedMarketplace(addrs[0].address, true))
+        .to.be.revertedWith("AccessControl:");
+    });
+
+    it("Should update approved marketplaces", async function () {
+        const marketplace = addrs[0].address;
+        
+        await expect(nfticket.setApprovedMarketplace(marketplace, true))
+            .to.emit(nfticket, "MarketplaceApprovalUpdated")
+            .withArgs(marketplace, true);
+            
+        expect(await nfticket.approvedMarketplaces(marketplace)).to.be.true;
     });
   });
 });
