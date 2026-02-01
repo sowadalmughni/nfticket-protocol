@@ -1,380 +1,203 @@
 # NFTicket Anti-Scalping Protocol
-**Author:** Sowad Al-Mughni
 
-An open-source NFT ticketing protocol designed to combat scalping while providing artists and event organizers with resale control and royalty mechanisms. Built with ERC-721 smart contracts, mobile wallet integration, and POAP functionality.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/sowadalmughni/nfticket-protocol/actions)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Twitter Follow](https://img.shields.io/twitter/follow/sowadalmughni?style=social)](https://twitter.com/sowadalmughni)
+
+**Author:** Md. Sowad Al-Mughni
+
+An open-source NFT ticketing protocol designed to combat scalping while providing artists and event organizers with resale control and royalty mechanisms. Built with **ERC-721** smart contracts, **React Native** mobile wallet integration, and **POAP** functionality for attendance verification.
 
 ## 🎯 Overview
-The NFTicket Anti-Scalping Protocol addresses the post-pandemic challenge of event ticket scalping while enabling artists and organizers to maintain control over secondary sales and earn royalties. The protocol combines blockchain technology with user-friendly mobile applications to create a comprehensive ticketing ecosystem.
 
-## Key Features
-- **ERC-721 NFT Tickets** with on-chain royalty caps and maximum price controls
-- **Mobile Wallet Integration** with offline QR code signature verification
-- **POAP Distribution** with "scan-to-airdrop" functionality for marketing
-- **Anti-Scalping Mechanisms** including price caps and royalty enforcement
-- **Decentralized Indexing** using The Graph for efficient data querying
-- **White-label Solution** for easy deployment by event organizers
+The **NFTicket Anti-Scalping Protocol** addresses the post-pandemic challenge of event ticket scalping while enabling artists and organizers to maintain control over secondary sales and earn royalties. The protocol combines blockchain technology with user-friendly mobile applications to create a comprehensive ticketing ecosystem that benefits everyone—except scalpers.
 
-## Technology Stack
-- **Smart Contracts:** Solidity, Hardhat, OpenZeppelin
-- **Web3 Integration:** Viem, Wagmi
-- **Indexing:** The Graph Protocol
-- **Backend API:** Express.js (for signature verification)
-- **Frontend:** React, Tailwind CSS
-- **Mobile:** React Native
-- **Testing:** Hardhat Test Suite
+## ✨ Key Features
+
+- **🎫 ERC-721 NFT Tickets**: Secure, transfer-restricted digital assets with on-chain metadata.
+- **🛡️ Anti-Scalping Engine**:
+  - **Price Caps**: Smart contracts enforce a strict maximum resale price.
+  - **Royalty Enforcement**: Automated royalty distribution to organizers on every secondary sale.
+- **📱 Mobile & Offline Integration**:
+  - **QR Verification**: Offline-first cryptographic signatures for venue entry.
+  - **Wallet Integration**: Compatible with MetaMask and WalletConnect.
+- **🏆 POAP Distribution**: "Scan-to-airdrop" mechanisms to reward attendees with soulbound Proof of Attendance tokens.
+- **🔎 Decentralized Indexing**: Powered by **The Graph** for high-performance data querying.
+- **🏭 White-label Ready**: Modular architecture allowing easy deployment for any event organizer.
+
+## 🏗️ System Architecture
+
+```mermaid
+graph TD
+    User[📱 Mobile App User] -->|Signs Message| QR[QR Code]
+    QR -->|Scanned by| Validator[Validator Device]
+    Validator -->|Verifies Sig| API[Validator API]
+    User -->|Mints/Transfers| Chain[Blockchain (Ethereum/Polygon)]
+    API -.->|Reads State| Chain
+    Subgraph[The Graph Node] -->|Indexes Events| Chain
+    Dashboard[💻 Web Dashboard] -->|Queries Data| Subgraph
+    Dashboard -->|Deploys Contracts| Chain
+    Organizer[Event Organizer] -->|Manages Events| Dashboard
+```
+
+## 🛠️ Technology Stack
+
+| Component | Technology | Description |
+|-----------|------------|-------------|
+| **Smart Contracts** | Solidity, Hardhat, OpenZeppelin | Core logic, ERC-721 extensions, AccessControl |
+| **Web3 Integration** | Viem, Wagmi, Ethers.js | Blockchain interaction and wallet management |
+| **Frontend** | React, Tailwind CSS | Responsive dashboard for organizers and users |
+| **Mobile** | React Native | Cross-platform wallet and ticket viewer |
+| **Indexing** | The Graph Protocol | Decentralized querying of on-chain data |
+| **Backend API** | Express.js | Off-chain signature verification and proof generation |
+| **Testing** | Hardhat Test Suite | Comprehensive unit and integration testing |
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 18+ and npm/pnpm
-- Git
-- MetaMask or compatible Web3 wallet
+- **Node.js** v18+ and **npm** or **pnpm**
+- **Git**
+- **MetaMask** or compatible Web3 wallet
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/sowadalmughni/nfticket-protocol.git
-   cd nfticket-protocol
-   ```
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/sowadalmughni/nfticket-protocol.git
+    cd nfticket-protocol
+    ```
 
-2. **Install Root Dependencies**
-   ```bash
-   npm install
-   ```
+2.  **Install Root Dependencies**
+    ```bash
+    npm install
+    ```
 
-3. **Backend & API Setup**
-   ```bash
-   cd backend
-   npm install
-   # Compile contracts
-   npx hardhat compile
-   # Run local validator API
-   node api/server.js
-   ```
+3.  **Backend & API Setup**
+    ```bash
+    cd backend
+    npm install
+    # Compile contracts to generate artifacts
+    npx hardhat compile
+    # (Optional) Run local validator API
+    # node api/server.js
+    cd ..
+    ```
 
-4. **Mobile App Setup**
-   ```bash
-   cd frontend/mobile-app/NFTicketApp
-   npm install
-   cd ../../..
-   ```
+4.  **Dashboard Setup**
+    ```bash
+    cd frontend/nfticket-dashboard
+    pnpm install
+    cd ../..
+    ```
 
-5. **Dashboard Setup**
-   ```bash
-   cd frontend/nfticket-dashboard
-   pnpm install
-   cd ../..
-   ```
+5.  **Mobile App Setup**
+    ```bash
+    cd frontend/mobile-app/NFTicketApp
+    npm install
+    cd ../../..
+    ```
 
 ### Smart Contract Deployment
 
-1. **Test**
-   ```bash
-   cd backend
-   npx hardhat test
-   ```
+1.  **Run Tests**
+    ```bash
+    cd backend
+    npx hardhat test
+    ```
 
-2. **Deploy**
-   ```bash
-   # Deploy to local network
-   npx hardhat node
-   npx hardhat run scripts/deploy.js --network localhost
+2.  **Deploy Contracts**
+    ```bash
+    # Deploy to local Hardhat Network
+    npx hardhat node
+    npx hardhat run scripts/deploy.js --network localhost
 
-   # Deploy to testnet
-   npx hardhat run scripts/deploy.js --network sepolia
-   ```
+    # Deploy to Sepolia Testnet
+    npx hardhat run scripts/deploy.js --network sepolia
+    ```
 
-### Running the Dashboard
+### Running the Applications
+
+**Web Dashboard**
 ```bash
 cd frontend/nfticket-dashboard
 pnpm run dev
-# The dashboard will be available at http://localhost:5173
+# Access at http://localhost:5173
 ```
 
-### Running the Mobile App
+**Mobile App**
 ```bash
 cd frontend/mobile-app/NFTicketApp
-
-# For iOS
+# iOS
 npx react-native run-ios
-
-# For Android
+# Android
 npx react-native run-android
 ```
 
-## 📋 Project Structure
+## 📁 Project Structure
 
-```
+```bash
 nfticket-protocol/
 ├── backend/                  # Smart contracts and backend services
-│   ├── contracts/            # Smart contracts (NFTicket.sol, POAPDistributor.sol)
+│   ├── contracts/            # Solidity contracts (NFTicket.sol, POAPDistributor.sol)
 │   ├── api/                  # Express.js Validator API for QR proofs
-│   ├── scripts/              # Deployment scripts
-│   └── test/                 # Contract tests
-├── subgraph/                 # The Graph protocol indexing logic
-│   ├── schema.graphql        # GraphQL schema definition
-│   └── subgraph.yaml         # Subgraph manifest
+│   └── test/                 # Hardhat unit tests
 ├── frontend/
 │   ├── mobile-app/           # React Native mobile application
-│   └── nfticket-dashboard/   # React web dashboard
-├── docs/                     # Documentation
-│   ├── Implementation.md     # Technical implementation details
-│   └── project_structure.md  # Project structure overview
-└── README.md                 # This file
+│   └── nfticket-dashboard/   # React web dashboard for organizers
+├── subgraph/                 # The Graph subgraph definition
+│   ├── schema.graphql        # GraphQL schema
+│   └── subgraph.yaml         # Subgraph manifest
+├── docs/                     # Technical documentation
+├── CONTRIBUTING.md           # Contribution guidelines
+└── README.md                 # Project documentation
 ```
-
-## 🎫 How It Works
-
-### Ticket Lifecycle
-1. **Event Creation:** Organizers deploy an NFTicket contract with specific parameters
-2. **Ticket Minting:** Individual tickets are minted as ERC-721 NFTs with metadata
-3. **Primary Sales:** Tickets are sold directly to consumers at face value
-4. **Secondary Market:** Resales are controlled by smart contract with price caps and royalties
-5. **Event Entry:** QR codes (signed off-chain) enable offline verification at venues via the Mobile App/API
-6. **POAP Distribution:** Attendees can claim commemorative POAPs after the event
-
-### Anti-Scalping Mechanisms
-- **Price Caps:** Maximum resale price enforced by smart contract
-- **Royalty System:** Percentage of resale value goes back to organizers/artists
-- **Transfer Restrictions:** Controlled transfer mechanisms prevent bulk scalping
-- **Identity Verification:** Optional KYC integration for high-value events
-
-## 🏗️ Architecture
-
-### Smart Contracts
-
-#### NFTicket.sol
-The main ERC-721 contract that handles:
-- Ticket minting and metadata management
-- Price cap enforcement on transfers
-- Royalty distribution to organizers
-- Event information storage
-- Ticket usage tracking
-
-#### POAPDistributor.sol
-Manages POAP (Proof of Attendance Protocol) tokens:
-- Batch minting for event attendees
-- Claim verification against ticket ownership
-- Supply management and distribution controls
-- Event-specific POAP metadata
-
-### Validator API
-An Express.js service (`backend/api/server.js`) providing:
-- **Proof Generation:** Simulates a secure enclave for generating ticket ownership proofs.
-- **QR Verification:** Verifies signatures from the mobile app for entry validation.
-
-### Subgraph (The Graph)
-Indexes on-chain data to provide efficient querying for the frontend:
-- Tracks ticket ownership history
-- Aggregates event statistics
-- Monitors POAP claims
-
-### Mobile Application
-Built with React Native for cross-platform compatibility:
-- **Wallet Integration:** Connect with MetaMask, WalletConnect, and other providers
-- **QR Code Generation:** Offline-capable ticket verification
-- **POAP Collection:** View and manage collected POAPs
-- **Ticket Management:** Transfer, view, and use tickets
-
-### Web Dashboard
-React-based admin interface for event organizers:
-- **Event Management:** Create and configure events
-- **Contract Deployment:** Deploy NFTicket contracts with custom parameters
-- **Analytics:** Track sales, transfers, and usage metrics
-- **POAP Management:** Configure and distribute commemorative tokens
 
 ## 🔧 Configuration
 
-### Environment Variables
-Create a `.env` file in the `backend/` directory:
+**Environment Variables**: Create a `.env` file in `backend/` based on the example.
 
 ```env
-# Wallet private key for deployment (use test accounts only)
-PRIVATE_KEY=your_private_key_here
-
-# RPC URLs for different networks
-MAINNET_RPC_URL=https://mainnet.infura.io/v3/your_project_id
-SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/your_project_id
-POLYGON_RPC_URL=https://polygon-rpc.com
-
-# Etherscan API keys for contract verification
-ETHERSCAN_API_KEY=your_etherscan_api_key
-POLYGONSCAN_API_KEY=your_polygonscan_api_key
-
-# WalletConnect project ID
-WALLETCONNECT_PROJECT_ID=your_walletconnect_project_id
+PRIVATE_KEY=your_wallet_private_key
+SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/your_api_key
+ETHERSCAN_API_KEY=your_etherscan_key
 ```
 
-### Contract Parameters
-When deploying NFTicket contracts, configure:
-- **Event Name:** Display name for the event
-- **Event Description:** Detailed event information
-- **Event Date:** Unix timestamp of event date
-- **Venue:** Event location
-- **Royalty Cap:** Maximum royalty percentage (e.g., 10%)
-- **Max Price:** Maximum resale price in ETH
-- **Royalty Recipient:** Address to receive royalty payments
-
-## 🧪 Testing
-
-### Smart Contract Tests
-```bash
-cd backend
-# Run all tests
-npx hardhat test
-
-# Run specific test file
-npx hardhat test test/NFTicket.test.js
-
-# Run tests with gas reporting
-REPORT_GAS=true npx hardhat test
-
-# Run tests with coverage
-npx hardhat coverage
-```
-
-### Frontend Testing
-```bash
-# Dashboard tests
-cd frontend/nfticket-dashboard
-npm test
-
-# Mobile app tests
-cd frontend/mobile-app/NFTicketApp
-npm test
-```
-
-## 🚀 Deployment
-
-### Testnet Deployment
-1. Configure your network in `backend/hardhat.config.js`
-2. Fund your deployment account with testnet ETH
-3. Deploy contracts:
-   ```bash
-   cd backend
-   npx hardhat run scripts/deploy.js --network sepolia
-   ```
-4. Verify contracts on Etherscan:
-   ```bash
-   npx hardhat verify --network sepolia DEPLOYED_CONTRACT_ADDRESS "Constructor" "Arguments"
-   ```
-
-### Mainnet Deployment
-> **⚠️ Warning:** Mainnet deployment involves real funds. Test thoroughly on testnets first.
-
-1. Ensure sufficient ETH for gas fees
-2. Double-check all contract parameters
-3. Deploy with mainnet configuration:
-   ```bash
-   cd backend
-   npx hardhat run scripts/deploy.js --network mainnet
-   ```
-
-### Frontend Deployment
-The dashboard can be deployed to any static hosting service:
-
-```bash
-cd frontend/nfticket-dashboard
-npm run build
-# Deploy the 'dist' folder to your hosting service
-```
-
-## 📱 Mobile App Distribution
-
-### iOS App Store
-1. Configure app signing in Xcode
-2. Build release version
-3. Submit to App Store Connect
-
-### Google Play Store
-1. Generate signed APK
-2. Upload to Google Play Console
-3. Complete store listing
-
-### White-label Customization
-The mobile app supports white-label customization:
-- Update app name and branding in configuration files
-- Replace logos and color schemes
-- Configure default contract addresses
-- Build and distribute custom versions
-
-## 🎨 Viral Marketing Features
-
-### Real-time Secondary Sales Graph
-Artists can share live secondary market data:
-
-```javascript
-// Example integration for social media sharing
-const shareSecondaryMarketData = async (contractAddress) => {
-  const salesData = await getSecondaryMarketData(contractAddress);
-  const chartImage = generateSalesChart(salesData);
-  
-  // Share to Twitter/X
-  shareToTwitter({
-    text: "Check out the real-time secondary market for my event! 🎫📈",
-    image: chartImage,
-    hashtags: ["NFTicket", "Web3Events", "AntiScalping"]
-  });
-};
-```
-
-### Ticket NFT Avatars
-Fans can use their ticket NFTs as profile pictures:
-
-```javascript
-// Generate avatar from ticket NFT
-const generateTicketAvatar = (ticketMetadata) => {
-  return {
-    image: ticketMetadata.image,
-    frame: "nfticket-frame.png",
-    eventName: ticketMetadata.eventName,
-    ticketNumber: ticketMetadata.tokenId
-  };
-};
-```
+**Contract Parameters**:
+Adjust default values in `scripts/deploy.js` to customize:
+- `Royalty Cap` (Default: 500 basis points = 5%)
+- `Max Price` (Default: 1 ETH)
 
 ## 🤝 Contributing
-We welcome contributions from the community! Please read our contributing guidelines:
 
-### Development Setup
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Ensure all tests pass
-6. Submit a pull request
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests.
 
-### Code Style
-- Use Prettier for code formatting
-- Follow Solidity style guide for smart contracts
-- Use ESLint configuration for JavaScript/TypeScript
-- Write comprehensive tests for new features
-
-### Reporting Issues
-Please use GitHub Issues to report bugs or request features. Include:
-- Clear description of the issue
-- Steps to reproduce
-- Expected vs actual behavior
-- Environment details (OS, Node version, etc.)
+1.  Fork the repo
+2.  Create your feature branch (`git checkout -b feature/amazing-feature`)
+3.  Commit your changes
+4.  Push to the branch
+5.  Open a Pull Request
 
 ## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
-- **OpenZeppelin** for secure smart contract libraries
-- **The Ethereum community** for ERC-721 standards
-- **The Graph Protocol** for decentralized querying support
-- **POAP Protocol** for inspiration on attendance verification
-- **React Native and React communities** for mobile and web frameworks
 
-## 📞 Support
-- **Primary Contact:** Md. Sowad Al-Mughni (sowad@kitalonlabs.com)
-- **Company:** Kitalon Labs
-- **GitHub Issues:** [Create an issue](https://github.com/sowadalmughni/nfticket-protocol/issues)
-- **Community:** Join our discussions in GitHub Discussions
+- **OpenZeppelin** for rock-solid contract libraries.
+- **The Graph** for making indexing easy.
+- **POAP** for the inspiration on attendance protocols.
 
 ---
+
+## 📞 Support
+
+For support, feature requests, or enterprise inquiries:
+
+- **Primary Contact:** Md. Sowad Al-Mughni (sowad@kitalonlabs.com)
+- **Company:** Kitalon Labs
+- **GitHub Issues:** [Open an Issue](https://github.com/sowadalmughni/nfticket-protocol/issues)
+
 **Maintained by Kitalon Labs — Md. Sowad Al-Mughni**
 
-**Made with ❤️ by Md. Sowad Al-Mughni**
+*Made with ❤️ for the decentralized future.*
