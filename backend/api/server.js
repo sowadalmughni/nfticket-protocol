@@ -5,14 +5,25 @@ const signerService = require('../services/SignerService');
 const gatedRoutes = require('./routes/gated');
 const loyaltyRoutes = require('./routes/loyalty');
 const themesRoutes = require('./routes/themes');
+const paymentsRoutes = require('./routes/payments');
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'nfticket-dev-secret-change-in-production';
-const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY || ''; // Firebase Cloud Messaging server key
+
+// Security: Require JWT_SECRET in production
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET environment variable is required in production');
+}
+const JWT_SECRET = process.env.JWT_SECRET || 'nfticket-dev-secret-DO-NOT-USE-IN-PRODUCTION';
+
+// Firebase Cloud Messaging - required for push notifications
+if (!process.env.FCM_SERVER_KEY && process.env.NODE_ENV === 'production') {
+  console.warn('WARNING: FCM_SERVER_KEY not set - push notifications disabled');
+}
+const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY || '';
 
 // In-memory device token storage (use database in production)
 const deviceTokens = new Map(); // Map<walletAddress, { token, platform, lastSeen }>
@@ -471,6 +482,9 @@ app.use('/loyalty', loyaltyRoutes);
 // Theme routes - /themes/*
 app.use('/themes', themesRoutes);
 
+// Payment routes - /payments/* (Stripe integration)
+app.use('/payments', paymentsRoutes);
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -481,4 +495,5 @@ app.listen(PORT, () => {
   console.log(`QR Proof expiration: ${signerService.getProofExpiration()} seconds (rotating)`);
   console.log(`Token-gated content: /gated/*`);
   console.log(`Loyalty points: /loyalty/*`);
+  console.log(`Stripe payments: /payments/*`);
 });

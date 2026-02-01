@@ -1,4 +1,5 @@
-type Ticket @entity {
+# Mutable entities - these can be updated after creation
+type Ticket @entity(immutable: false) {
   id: ID!
   tokenId: BigInt!
   owner: Account!
@@ -9,13 +10,14 @@ type Ticket @entity {
   transfers: [Transfer!]! @derivedFrom(field: "ticket")
 }
 
-type Account @entity {
+type Account @entity(immutable: false) {
   id: ID! # Wallet address
   tickets: [Ticket!]! @derivedFrom(field: "owner")
   marketplacesApproved: [MarketplaceApproval!]! @derivedFrom(field: "account")
 }
 
-type Transfer @entity {
+# Immutable entities - these are never updated after creation (events)
+type Transfer @entity(immutable: true) {
   id: ID!
   ticket: Ticket!
   from: Account!
@@ -26,7 +28,7 @@ type Transfer @entity {
   timestamp: BigInt!
 }
 
-type MarketplaceApproval @entity {
+type MarketplaceApproval @entity(immutable: true) {
   id: ID!
   account: Account!
   marketplace: Bytes!
@@ -34,7 +36,7 @@ type MarketplaceApproval @entity {
   timestamp: BigInt!
 }
 
-type ProtocolStats @entity {
+type ProtocolStats @entity(immutable: false) {
   id: ID!
   totalTicketsMinted: BigInt!
   totalTicketsUsed: BigInt!

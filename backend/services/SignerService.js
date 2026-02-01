@@ -1,8 +1,11 @@
 const { ethers } = require("ethers");
 
-// Configuration - should be environment variables in production
-const PRIVATE_KEY = process.env.SIGNER_PRIVATE_KEY || "0x0123456789012345678901234567890123456789012345678901234567890123"; 
-const DEFAULT_CHAIN_ID = parseInt(process.env.CHAIN_ID || "31337");
+// Configuration - REQUIRED environment variables
+if (!process.env.SIGNER_PRIVATE_KEY) {
+  throw new Error('SIGNER_PRIVATE_KEY environment variable is required');
+}
+const PRIVATE_KEY = process.env.SIGNER_PRIVATE_KEY;
+const DEFAULT_CHAIN_ID = parseInt(process.env.CHAIN_ID || "11155111"); // Default to Sepolia
 
 // Multi-chain RPC Configuration
 const RPC_URLS = {

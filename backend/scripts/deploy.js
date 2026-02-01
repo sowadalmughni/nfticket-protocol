@@ -30,7 +30,7 @@ async function main() {
   console.log("   Event Date:", new Date(eventDate * 1000).toISOString());
   console.log("   Venue:", venue);
   console.log("   Royalty Cap:", royaltyCap / 100, "%");
-  console.log("   Max Price:", ethers.utils.formatEther(maxPrice), "ETH");
+  console.log("   Max Price:", ethers.formatEther(maxPrice), "ETH");
   console.log("   Royalty Recipient:", royaltyRecipient);
   console.log();
 
@@ -108,29 +108,43 @@ async function main() {
   console.log("🎉 Deployment completed successfully!");
   console.log();
   console.log("📋 Contract Addresses:");
-  console.log("   NFTicket:", nfticket.address);
-  console.log("   POAPDistributor:", poapDistributor.address);
+  console.log("   NFTicket:", nfticketAddress);
+  console.log("   POAPDistributor:", poapDistributorAddress);
   console.log();
+  
+  // Get network info
+  const network = await ethers.provider.getNetwork();
+  const networkName = network.name === 'unknown' ? `chain-${network.chainId}` : network.name;
+  
+  console.log("📝 Environment Variables (copy to .env):");
+  console.log("─".repeat(50));
+  const chainPrefix = getChainPrefix(Number(network.chainId));
+  console.log(`VITE_CONTRACT_${chainPrefix}_NFTICKET=${nfticketAddress}`);
+  console.log(`VITE_CONTRACT_${chainPrefix}_POAP=${poapDistributorAddress}`);
+  console.log(`CONTRACT_${chainPrefix}=${nfticketAddress}`);
+  console.log("─".repeat(50));
+  console.log();
+  
   console.log("🔧 Next Steps:");
-  console.log("1. Verify contracts on Etherscan:");
-  console.log(`   npx hardhat verify --network ${network.name} ${nfticket.address} "${eventName}" "${eventDescription}" ${eventDate} "${venue}" ${royaltyCap} ${maxPrice} ${royaltyRecipient}`);
-  console.log(`   npx hardhat verify --network ${network.name} ${poapDistributor.address} "${poapEventName}" "${poapEventDescription}" ${eventDate} "${poapLocation}" ${maxSupply} "${baseTokenURI}"`);
+  console.log("1. Verify contracts on block explorer:");
+  console.log(`   npx hardhat verify --network ${networkName} ${nfticketAddress} "${eventName}" "${eventDescription}" ${eventDate} "${venue}" ${royaltyCap} ${maxPrice} ${royaltyRecipient}`);
+  console.log(`   npx hardhat verify --network ${networkName} ${poapDistributorAddress} "${poapEventName}" "${poapEventDescription}" ${eventDate} "${poapLocation}" "${baseTokenURI}" ${maxSupply}`);
   console.log();
-  console.log("2. Update frontend configuration with contract addresses");
-  console.log("3. Test contract functionality through dashboard");
-  console.log("4. Configure POAP metadata and images");
+  console.log("2. Update .env files with contract addresses above");
+  console.log("3. Update subgraph/subgraph.yaml with NFTicket address");
+  console.log("4. Deploy subgraph: cd subgraph && graph deploy");
   console.log();
 
   // Save deployment info to file
   const deploymentInfo = {
-    network: network.name,
-    chainId: network.config.chainId,
+    network: networkName,
+    chainId: Number(network.chainId),
     deployer: deployer.address,
     timestamp: new Date().toISOString(),
     contracts: {
       NFTicket: {
-        address: nfticket.address,
-        transactionHash: nfticket.deployTransaction.hash,
+        address: nfticketAddress,
+        transactionHash: nfticket.deploymentTransaction().hash,
         parameters: {
           eventName,
           eventDescription,
@@ -142,8 +156,8 @@ async function main() {
         }
       },
       POAPDistributor: {
-        address: poapDistributor.address,
-        transactionHash: poapDistributor.deployTransaction.hash,
+        address: poapDistributorAddress,
+        transactionHash: poapDistributor.deploymentTransaction().hash,
         parameters: {
           eventName: poapEventName,
           eventDescription: poapEventDescription,
@@ -153,11 +167,16 @@ async function main() {
           baseTokenURI
         }
       }
+    },
+    envVariables: {
+      [`VITE_CONTRACT_${chainPrefix}_NFTICKET`]: nfticketAddress,
+      [`VITE_CONTRACT_${chainPrefix}_POAP`]: poapDistributorAddress,
+      [`CONTRACT_${chainPrefix}`]: nfticketAddress,
     }
   };
 
   const fs = require('fs');
-  const deploymentPath = `deployments/${network.name}-${Date.now()}.json`;
+  const deploymentPath = `deployments/${networkName}-${Date.now()}.json`;
   
   // Create deployments directory if it doesn't exist
   if (!fs.existsSync('deployments')) {
@@ -166,6 +185,24 @@ async function main() {
   
   fs.writeFileSync(deploymentPath, JSON.stringify(deploymentInfo, null, 2));
   console.log("💾 Deployment info saved to:", deploymentPath);
+}
+
+/**
+ * Get chain prefix for environment variables
+ */
+function getChainPrefix(chainId) {
+  const prefixes = {
+    1: 'MAINNET',
+    137: 'POLYGON',
+    8453: 'BASE',
+    42161: 'ARBITRUM',
+    11155111: 'SEPOLIA',
+    80002: 'AMOY',
+    84532: 'BASE_SEPOLIA',
+    421614: 'ARBITRUM_SEPOLIA',
+    31337: 'LOCAL',
+  };
+  return prefixes[chainId] || `CHAIN_${chainId}`;
 }
 
 main()

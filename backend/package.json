@@ -10,8 +10,16 @@
     "test:coverage": "npx hardhat coverage",
     "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
     "deploy:sepolia": "npx hardhat run scripts/deploy.js --network sepolia",
+    "deploy:polygon": "npx hardhat run scripts/deploy.js --network polygon",
+    "deploy:polygon-amoy": "npx hardhat run scripts/deploy.js --network polygonAmoy",
+    "deploy:base": "npx hardhat run scripts/deploy.js --network base",
+    "deploy:arbitrum": "npx hardhat run scripts/deploy.js --network arbitrum",
+    "verify:sepolia": "npx hardhat verify --network sepolia",
+    "verify:polygon": "npx hardhat verify --network polygon",
     "node": "npx hardhat node",
     "api": "node api/server.js",
+    "api:dev": "NODE_ENV=development node api/server.js",
+    "api:prod": "NODE_ENV=production node api/server.js",
     "lint": "eslint . --ext .js,.ts",
     "format": "prettier --write \"**/*.{js,ts,sol}\""
   },
@@ -41,6 +49,9 @@
     "cors": "^2.8.6",
     "dotenv": "^16.4.1",
     "ethers": "^6.10.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.2",
+    "redis": "^4.6.13",
+    "stripe": "^14.17.0"
   }
 }
