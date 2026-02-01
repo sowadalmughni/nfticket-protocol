@@ -208,3 +208,5 @@ test-reports/
 blockchain-data/
 geth/
 
+
+test_output.txt
