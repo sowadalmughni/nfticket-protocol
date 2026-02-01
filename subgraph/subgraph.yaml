@@ -21,7 +21,7 @@ dataSources:
         - ProtocolStats
       abis:
         - name: NFTicket
-          file: ../backend/artifacts/contracts/NFTicket.sol/NFTicket.json
+          file: ./abis/NFTicket.json
       eventHandlers:
         - event: TicketMinted(indexed uint256,indexed address,string)
           handler: handleTicketMinted

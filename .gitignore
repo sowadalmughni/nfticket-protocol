@@ -210,3 +210,4 @@ geth/
 
 
 test_output.txt
+subgraph/codegen_error.txt

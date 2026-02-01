@@ -3,6 +3,7 @@
     "axios": "^1.13.4"
   },
   "devDependencies": {
-    "@graphprotocol/graph-cli": "^0.98.1"
+    "@graphprotocol/graph-cli": "^0.98.1",
+    "@graphprotocol/graph-ts": "^0.38.2"
   }
 }
