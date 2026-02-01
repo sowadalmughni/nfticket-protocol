@@ -7,6 +7,11 @@
 import React, { createContext, useContext, useState } from 'react';
 import { ethers } from 'ethers';
 import { useWallet } from './WalletService';
+import {
+  getPOAPAddress,
+  areContractsConfigured,
+  DEFAULT_NETWORK,
+} from '../config';
 
 // POAPDistributor contract ABI (simplified for mobile app)
 const POAP_DISTRIBUTOR_ABI = [
@@ -36,12 +41,13 @@ export const POAPProvider = ({ children }) => {
   const [poaps, setPOAPs] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Contract addresses (these would be deployed contract addresses)
-  const POAP_CONTRACT_ADDRESSES = {
-    ethereum: '0x...', // Replace with actual deployed contract address
-    polygon: '0x...', // Replace with actual deployed contract address
-    sepolia: '0x...', // Replace with actual deployed contract address
+  // Get POAP contract address from centralized config
+  const getContractAddress = () => {
+    return getPOAPAddress(DEFAULT_NETWORK);
   };
+
+  // Check if contracts are configured
+  const isConfigured = areContractsConfigured(DEFAULT_NETWORK);
 
   const getContract = (contractAddress) => {
     if (!provider) {
@@ -59,37 +65,42 @@ export const POAPProvider = ({ children }) => {
       setLoading(true);
       const allPOAPs = [];
 
-      // For demo purposes, we'll use a mock contract address
-      // In production, you'd iterate through known POAP contract addresses
-      const mockContractAddress = POAP_CONTRACT_ADDRESSES.sepolia || '0x9876543210987654321098765432109876543210';
+      // Get configured POAP contract address, fall back to demo mode if not configured
+      const contractAddress = getContractAddress();
       
-      try {
-        const contract = getContract(mockContractAddress);
-        const balance = await contract.balanceOf(address);
-        
-        for (let i = 0; i < balance.toNumber(); i++) {
-          const tokenId = await contract.tokenOfOwnerByIndex(address, i);
-          const tokenURI = await contract.tokenURI(tokenId);
-          const eventInfo = await contract.getEventInfo();
-          
-          const poap = {
-            tokenId: tokenId.toNumber(),
-            contractAddress: mockContractAddress,
-            owner: address,
-            uri: tokenURI,
-            eventName: eventInfo.name,
-            eventDescription: eventInfo.description,
-            eventDate: eventInfo.date.toNumber(),
-            eventLocation: eventInfo.location,
-            imageUri: `https://example.com/poap/${tokenId.toNumber()}.png`,
-          };
-          
-          allPOAPs.push(poap);
-        }
-      } catch (error) {
-        console.log('POAP contract not found or error fetching POAPs:', error.message);
-        // For demo purposes, add mock POAPs
+      if (!contractAddress) {
+        // Demo mode - use mock POAPs when no contracts configured
+        console.log('No POAP contracts configured - running in demo mode');
         allPOAPs.push(...getMockPOAPs());
+      } else {
+        try {
+          const contract = getContract(contractAddress);
+          const balance = await contract.balanceOf(address);
+          
+          for (let i = 0; i < balance.toNumber(); i++) {
+            const tokenId = await contract.tokenOfOwnerByIndex(address, i);
+            const tokenURI = await contract.tokenURI(tokenId);
+            const eventInfo = await contract.getEventInfo();
+            
+            const poap = {
+              tokenId: tokenId.toNumber(),
+              contractAddress: contractAddress,
+              owner: address,
+              uri: tokenURI,
+              eventName: eventInfo.name,
+              eventDescription: eventInfo.description,
+              eventDate: eventInfo.date.toNumber(),
+              eventLocation: eventInfo.location,
+              imageUri: `https://example.com/poap/${tokenId.toNumber()}.png`,
+            };
+            
+            allPOAPs.push(poap);
+          }
+        } catch (error) {
+          console.log('Error fetching POAPs from contract:', error.message);
+          // Fall back to demo mode on error
+          allPOAPs.push(...getMockPOAPs());
+        }
       }
 
       setPOAPs(allPOAPs);

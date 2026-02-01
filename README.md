@@ -90,6 +90,39 @@ npm run deploy:arbitrum
 
 ## 🚀 Quick Start
 
+> **Full setup guide:** See [SETUP.md](SETUP.md) for complete instructions including testnet deployment.
+
+### 5-Minute Demo (Local Development)
+
+```bash
+# Clone and setup backend
+git clone https://github.com/sowadalmughni/nfticket-protocol.git
+cd nfticket-protocol/backend
+npm install && cp .env.example .env
+npm run api:dev  # Starts API on http://localhost:3001
+
+# In a new terminal - run dashboard
+cd frontend/nfticket-dashboard
+pnpm install && cp .env.example .env
+pnpm dev  # Opens http://localhost:5173
+```
+
+The app runs in **demo mode** with mock data. To use real contracts:
+
+### Deploy to Polygon Amoy Testnet
+
+1. Get free testnet MATIC from [faucet.polygon.technology](https://faucet.polygon.technology/)
+2. Add your wallet private key to `backend/.env`:
+   ```env
+   DEPLOYER_PRIVATE_KEY=0x...
+   ```
+3. Deploy:
+   ```bash
+   cd backend
+   npm run deploy:polygon-amoy
+   ```
+4. Copy the output contract addresses to your `.env` files
+
 ### Prerequisites
 - **Node.js** v18+ and **npm** or **pnpm**
 - **Git**

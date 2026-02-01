@@ -8,9 +8,15 @@
 import React, { createContext, useContext, useState, useRef, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useWallet } from './WalletService';
+import {
+  API_CONFIG,
+  getNFTicketAddress,
+  areContractsConfigured,
+  DEFAULT_NETWORK,
+} from '../config';
 
 // API Configuration
-const API_BASE_URL = process.env.API_URL || 'http://localhost:3001';
+const API_BASE_URL = API_CONFIG.baseUrl;
 
 // NFTicket contract ABI (simplified for mobile app)
 const NFT_TICKET_ABI = [
@@ -46,12 +52,13 @@ export const TicketProvider = ({ children }) => {
   const refreshIntervalRef = useRef(null);
   const lastProofTimestampRef = useRef(null);
 
-  // Contract addresses (these would be deployed contract addresses)
-  const CONTRACT_ADDRESSES = {
-    ethereum: '0x...', // Replace with actual deployed contract address
-    polygon: '0x...', // Replace with actual deployed contract address
-    sepolia: '0x...', // Replace with actual deployed contract address
+  // Get contract address from centralized config
+  const getContractAddress = () => {
+    return getNFTicketAddress(DEFAULT_NETWORK);
   };
+
+  // Check if contracts are configured
+  const isConfigured = areContractsConfigured(DEFAULT_NETWORK);
 
   const getContract = (contractAddress) => {
     if (!provider) {
@@ -69,39 +76,44 @@ export const TicketProvider = ({ children }) => {
       setLoading(true);
       const allTickets = [];
 
-      // For demo purposes, we'll use a mock contract address
-      // In production, you'd iterate through known contract addresses
-      const mockContractAddress = CONTRACT_ADDRESSES.sepolia || '0x1234567890123456789012345678901234567890';
+      // Get configured contract address, fall back to demo mode if not configured
+      const contractAddress = getContractAddress();
       
-      try {
-        const contract = getContract(mockContractAddress);
-        const balance = await contract.balanceOf(address);
-        
-        for (let i = 0; i < balance.toNumber(); i++) {
-          const tokenId = await contract.tokenOfOwnerByIndex(address, i);
-          const ticketInfo = await contract.getTicketInfo(tokenId);
-          const eventInfo = await contract.getEventInfo();
-          
-          const ticket = {
-            tokenId: tokenId.toNumber(),
-            contractAddress: mockContractAddress,
-            owner: ticketInfo.owner,
-            uri: ticketInfo.uri,
-            isUsed: ticketInfo.used,
-            originalPrice: ethers.utils.formatEther(ticketInfo.origPrice),
-            eventName: eventInfo.name,
-            eventDescription: eventInfo.description,
-            eventDate: eventInfo.date.toNumber(),
-            eventVenue: eventInfo.venue,
-            qrData: `nfticket://${mockContractAddress}/${tokenId.toNumber()}`,
-          };
-          
-          allTickets.push(ticket);
-        }
-      } catch (error) {
-        console.log('Contract not found or error fetching tickets:', error.message);
-        // For demo purposes, add mock tickets
+      if (!contractAddress) {
+        // Demo mode - use mock tickets when no contracts configured
+        console.log('No contracts configured - running in demo mode');
         allTickets.push(...getMockTickets());
+      } else {
+        try {
+          const contract = getContract(contractAddress);
+          const balance = await contract.balanceOf(address);
+          
+          for (let i = 0; i < balance.toNumber(); i++) {
+            const tokenId = await contract.tokenOfOwnerByIndex(address, i);
+            const ticketInfo = await contract.getTicketInfo(tokenId);
+            const eventInfo = await contract.getEventInfo();
+            
+            const ticket = {
+              tokenId: tokenId.toNumber(),
+              contractAddress: contractAddress,
+              owner: ticketInfo.owner,
+              uri: ticketInfo.uri,
+              isUsed: ticketInfo.used,
+              originalPrice: ethers.utils.formatEther(ticketInfo.origPrice),
+              eventName: eventInfo.name,
+              eventDescription: eventInfo.description,
+              eventDate: eventInfo.date.toNumber(),
+              eventVenue: eventInfo.venue,
+              qrData: `nfticket://${contractAddress}/${tokenId.toNumber()}`,
+            };
+            
+            allTickets.push(ticket);
+          }
+        } catch (error) {
+          console.log('Error fetching tickets from contract:', error.message);
+          // Fall back to demo mode on error
+          allTickets.push(...getMockTickets());
+        }
       }
 
       setTickets(allTickets);

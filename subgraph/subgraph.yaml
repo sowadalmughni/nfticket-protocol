@@ -4,15 +4,20 @@ schema:
 dataSources:
   - kind: ethereum
     name: NFTicket
-    # Network options: matic (Polygon mainnet), mumbai (Polygon testnet), mainnet (Ethereum)
-    # For Polygon Amoy testnet, use: matic-amoy
-    network: matic
+    # Network options:
+    # - matic-amoy: Polygon Amoy Testnet (recommended for development)
+    # - matic: Polygon Mainnet (production)
+    # - mainnet: Ethereum Mainnet
+    # - sepolia: Ethereum Sepolia Testnet
+    network: matic-amoy
     source:
-      # Update with deployed contract address - run `npm run deploy:polygon` first
+      # IMPORTANT: Replace with your deployed NFTicket contract address
+      # Deploy contracts first: cd backend && npx hardhat run scripts/deploy.js --network polygonAmoy
       address: "0x0000000000000000000000000000000000000000"
       abi: NFTicket
-      # Polygon mainnet start block - update to deployment block for faster sync
-      startBlock: 54000000
+      # Polygon Amoy start block - update to your deployment block for faster sync
+      # Find your deployment block on https://amoy.polygonscan.com
+      startBlock: 10000000
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
