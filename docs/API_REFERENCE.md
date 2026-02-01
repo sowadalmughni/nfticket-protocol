@@ -1655,5 +1655,100 @@ async function authenticateWithWallet(address, signer) {
 
 ---
 
+## Phase 4 APIs
+
+### Token Gating API
+
+Manage token-gated exclusive content and experiences.
+
+#### `GET /gated/rules`
+
+Get all available gating rules.
+
+**Response:**
+```json
+{
+  "rules": [
+    {
+      "id": "vip-lounge",
+      "name": "VIP Lounge Access",
+      "description": "Exclusive access for VIP ticket holders",
+      "active": true,
+      "requirementsCount": 1
+    }
+  ]
+}
+```
+
+#### `POST /gated/check-eligibility`
+
+Check if a wallet is eligible for a gating rule.
+
+**Request:**
+```json
+{
+  "ruleId": "vip-lounge",
+  "walletAddress": "0x..."
+}
+```
+
+#### `GET /gated/my-perks` (Auth Required)
+
+Get user's unlocked perks based on their NFT holdings.
+
+#### `GET /gated/access/:ruleId` (Auth Required)
+
+Access gated content if eligible.
+
+### Loyalty Points API
+
+Manage non-tradeable loyalty points program.
+
+#### `GET /loyalty/tiers`
+
+Get all loyalty tiers and thresholds.
+
+#### `GET /loyalty/earning-rates`
+
+Get current points earning rates.
+
+#### `GET /loyalty/balance` (Auth Required)
+
+Get user's points balance and tier.
+
+#### `GET /loyalty/history` (Auth Required)
+
+Get user's earning and redemption history.
+
+#### `POST /loyalty/redeem` (Auth Required)
+
+Redeem points for a reward.
+
+### White-Label Theming API
+
+Manage organizer branding and themes.
+
+#### `GET /themes`
+
+Get default theme configuration and options.
+
+#### `GET /themes/:slug`
+
+Get theme by organizer slug.
+
+#### `POST /themes/register` (Auth Required)
+
+Register as an organizer.
+
+#### `PUT /themes/my-theme` (Auth Required)
+
+Update organizer's theme.
+
+#### `GET /themes/css/:slug`
+
+Get CSS variables for a theme (for embedding).
+
+---
+
 This API reference provides comprehensive documentation for all components of the NFTicket Anti-Scalping Protocol. For additional examples and integration guides, refer to the main documentation and code samples in the repository.
 

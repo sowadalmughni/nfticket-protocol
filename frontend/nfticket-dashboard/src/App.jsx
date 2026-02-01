@@ -12,6 +12,9 @@ import { Tickets } from './pages/Tickets'
 import { POAPs } from './pages/POAPs'
 import { Analytics } from './pages/Analytics'
 import { Settings } from './pages/Settings'
+import { TokenGating } from './pages/TokenGating'
+import { Loyalty } from './pages/Loyalty'
+import { Branding } from './pages/Branding'
 import './App.css'
 
 function App() {
@@ -31,6 +34,9 @@ function App() {
                 <a href="/events" className="text-gray-600 hover:text-gray-800">Events</a>
                 <a href="/tickets" className="text-gray-600 hover:text-gray-800">Tickets</a>
                 <a href="/poaps" className="text-gray-600 hover:text-gray-800">POAPs</a>
+                <a href="/token-gating" className="text-gray-600 hover:text-gray-800">Token Gating</a>
+                <a href="/loyalty" className="text-gray-600 hover:text-gray-800">Loyalty</a>
+                <a href="/branding" className="text-gray-600 hover:text-gray-800">Branding</a>
                 <a href="/analytics" className="text-gray-600 hover:text-gray-800">Analytics</a>
                 <a href="/settings" className="text-gray-600 hover:text-gray-800">Settings</a>
               </div>
@@ -41,6 +47,9 @@ function App() {
               <Route path="/events" element={<Events />} />
               <Route path="/tickets" element={<Tickets />} />
               <Route path="/poaps" element={<POAPs />} />
+              <Route path="/token-gating" element={<TokenGating />} />
+              <Route path="/loyalty" element={<Loyalty />} />
+              <Route path="/branding" element={<Branding />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
             </Routes>

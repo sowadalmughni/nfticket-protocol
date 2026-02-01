@@ -16,6 +16,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import TicketsScreen from './src/screens/TicketsScreen';
 import WalletScreen from './src/screens/WalletScreen';
 import POAPScreen from './src/screens/POAPScreen';
+import ExclusiveScreen from './src/screens/ExclusiveScreen';
+import LoyaltyScreen from './src/screens/LoyaltyScreen';
 
 // Create navigators
 const Tab = createBottomTabNavigator();
@@ -82,6 +84,20 @@ function MainTabs() {
         component={POAPScreen}
         options={{
           tabBarLabel: '🏆 POAPs',
+        }}
+      />
+      <Tab.Screen 
+        name="Exclusive" 
+        component={ExclusiveScreen}
+        options={{
+          tabBarLabel: '🔐 Exclusive',
+        }}
+      />
+      <Tab.Screen 
+        name="Loyalty" 
+        component={LoyaltyScreen}
+        options={{
+          tabBarLabel: '💎 Loyalty',
         }}
       />
       <Tab.Screen 

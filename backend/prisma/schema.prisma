@@ -1,0 +1,167 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Organizer - Event organizers who can white-label the platform
+model Organizer {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  email       String   @unique
+  walletAddress String @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  theme       Theme?
+  events      Event[]
+  apiKeys     ApiKey[]
+}
+
+// Theme - White-label branding configuration
+model Theme {
+  id            String   @id @default(uuid())
+  organizerId   String   @unique
+  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  
+  // Brand colors
+  primaryColor    String  @default("#3B82F6")
+  secondaryColor  String  @default("#10B981")
+  accentColor     String  @default("#8B5CF6")
+  backgroundColor String  @default("#FFFFFF")
+  surfaceColor    String  @default("#F9FAFB")
+  textColor       String  @default("#111827")
+  textSecondary   String  @default("#6B7280")
+  
+  // Brand assets
+  logoUrl         String?
+  faviconUrl      String?
+  bannerUrl       String?
+  
+  // Typography
+  fontFamily      String  @default("Inter")
+  headingFont     String  @default("Inter")
+  
+  // Custom CSS (advanced)
+  customCss       String?
+  
+  // Mobile app theming
+  mobileHeaderColor   String @default("#FFFFFF")
+  mobileTabBarColor   String @default("#FFFFFF")
+  mobileAccentColor   String @default("#3B82F6")
+  
+  // Feature flags
+  showPoweredBy       Boolean @default(true)
+  customDomain        String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Event - Events created by organizers
+model Event {
+  id            String   @id @default(uuid())
+  organizerId   String
+  organizer     Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  
+  name          String
+  description   String?
+  venue         String
+  date          DateTime
+  endDate       DateTime?
+  timezone      String   @default("UTC")
+  
+  // Blockchain info
+  contractAddress String?
+  chainId         Int      @default(8453) // Base
+  
+  // Venue configuration
+  venueConfig     Json?    // Stores seat map configuration
+  
+  // Ticket tiers
+  tiers           TicketTier[]
+  
+  // Status
+  status          EventStatus @default(DRAFT)
+  publishedAt     DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([organizerId])
+}
+
+model TicketTier {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(18, 2)
+  currency    String   @default("USD")
+  supply      Int
+  sold        Int      @default(0)
+  
+  // Seat mapping
+  sectionId   String?
+  category    String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([eventId])
+}
+
+// API Keys for organizer integrations
+model ApiKey {
+  id          String   @id @default(uuid())
+  organizerId String
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  
+  name        String
+  keyHash     String   @unique // Hashed API key
+  prefix      String   // First 8 chars for identification
+  
+  permissions String[] @default(["read"])
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([organizerId])
+  @@index([keyHash])
+}
+
+// Analytics tracking
+model AnalyticsEvent {
+  id          String   @id @default(uuid())
+  eventType   String   // page_view, ticket_purchase, qr_scan, etc.
+  organizerId String?
+  eventId     String?
+  userId      String?  // Wallet address
+  
+  properties  Json?
+  timestamp   DateTime @default(now())
+
+  @@index([organizerId, timestamp])
+  @@index([eventId, timestamp])
+  @@index([eventType, timestamp])
+}
+
+// Enums
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  SOLD_OUT
+  CANCELLED
+  COMPLETED
+}

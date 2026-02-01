@@ -34,11 +34,22 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
     mapping(uint256 => bool) public ticketUsed; // Track if ticket has been used for entry
     mapping(uint256 => uint256) public originalPrice; // Track original sale price
 
+    // Seat mapping
+    struct SeatInfo {
+        string section;
+        string row;
+        string seatNumber;
+        string category; // VIP, General, etc.
+    }
+    mapping(uint256 => SeatInfo) public ticketSeats;
+    mapping(bytes32 => bool) public seatTaken; // Track which seats are reserved
+
     mapping(address => bool) public approvedMarketplaces;
     bool private _isInternalTransfer;
 
     // Events
     event TicketMinted(uint256 indexed tokenId, address indexed to, string uri);
+    event TicketMintedWithSeat(uint256 indexed tokenId, address indexed to, string section, string row, string seatNumber);
     event TicketTransferred(uint256 indexed tokenId, address indexed from, address indexed to, uint256 price, uint256 royaltyAmount);
     event TicketUsed(uint256 indexed tokenId, address indexed owner);
     event RoyaltyCapUpdated(uint256 newRoyaltyCap);
@@ -87,6 +98,92 @@ contract NFTicket is ERC721, ERC721URIStorage, AccessControl, ReentrancyGuard {
         
         emit TicketMinted(tokenId, to, uri);
         return tokenId;
+    }
+
+    /**
+     * @dev Mint a new NFTicket with seat assignment
+     * @param to Address to mint the ticket to
+     * @param uri Metadata URI for the ticket
+     * @param price Original sale price of the ticket
+     * @param section Section identifier (e.g., "A", "B", "VIP")
+     * @param row Row identifier (e.g., "1", "2", "AA")
+     * @param seatNumber Seat number (e.g., "1", "15", "A1")
+     * @param category Ticket category (e.g., "VIP", "General", "Premium")
+     */
+    function mintTicketWithSeat(
+        address to, 
+        string memory uri, 
+        uint256 price,
+        string memory section,
+        string memory row,
+        string memory seatNumber,
+        string memory category
+    ) 
+        public 
+        onlyRole(MINTER_ROLE) 
+        returns (uint256) 
+    {
+        // Create seat hash to check uniqueness
+        bytes32 seatHash = keccak256(abi.encodePacked(section, row, seatNumber));
+        require(!seatTaken[seatHash], "NFTicket: seat already taken");
+        
+        uint256 tokenId = _tokenIdCounter++;
+        
+        _safeMint(to, tokenId);
+        _setTokenURI(tokenId, uri);
+        originalPrice[tokenId] = price;
+        
+        // Store seat information
+        ticketSeats[tokenId] = SeatInfo({
+            section: section,
+            row: row,
+            seatNumber: seatNumber,
+            category: category
+        });
+        seatTaken[seatHash] = true;
+        
+        emit TicketMinted(tokenId, to, uri);
+        emit TicketMintedWithSeat(tokenId, to, section, row, seatNumber);
+        return tokenId;
+    }
+
+    /**
+     * @dev Get seat information for a ticket
+     * @param tokenId Token ID to query
+     * @return section Section identifier
+     * @return row Row identifier
+     * @return seatNumber Seat number
+     * @return category Ticket category
+     */
+    function getSeatInfo(uint256 tokenId) 
+        public 
+        view 
+        returns (
+            string memory section,
+            string memory row,
+            string memory seatNumber,
+            string memory category
+        ) 
+    {
+        require(ownerOf(tokenId) != address(0), "NFTicket: ticket does not exist");
+        SeatInfo memory seat = ticketSeats[tokenId];
+        return (seat.section, seat.row, seat.seatNumber, seat.category);
+    }
+
+    /**
+     * @dev Check if a seat is available
+     * @param section Section identifier
+     * @param row Row identifier
+     * @param seatNumber Seat number
+     * @return available True if seat is available
+     */
+    function isSeatAvailable(
+        string memory section,
+        string memory row,
+        string memory seatNumber
+    ) public view returns (bool available) {
+        bytes32 seatHash = keccak256(abi.encodePacked(section, row, seatNumber));
+        return !seatTaken[seatHash];
     }
 
     /**

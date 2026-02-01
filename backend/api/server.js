@@ -2,6 +2,9 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const signerService = require('../services/SignerService');
+const gatedRoutes = require('./routes/gated');
+const loyaltyRoutes = require('./routes/loyalty');
+const themesRoutes = require('./routes/themes');
 
 const app = express();
 app.use(express.json());
@@ -442,6 +445,32 @@ async function notifyTicketEvent(walletAddress, eventType, ticketData) {
 module.exports.notifyTicketEvent = notifyTicketEvent;
 module.exports.NOTIFICATION_TYPES = NOTIFICATION_TYPES;
 
+// ==========================================
+// TOKEN-GATED CONTENT ROUTES
+// ==========================================
+
+// Mount gated routes with optional JWT auth (some routes are public)
+app.use('/gated', (req, res, next) => {
+  // Try to authenticate but don't require it for all routes
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token) {
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+      if (!err) {
+        req.user = user;
+      }
+    });
+  }
+  next();
+}, gatedRoutes);
+
+// Loyalty routes - /loyalty/*
+app.use('/loyalty', loyaltyRoutes);
+
+// Theme routes - /themes/*
+app.use('/themes', themesRoutes);
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -450,4 +479,6 @@ app.get('/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Validator API running on http://localhost:${PORT}`);
   console.log(`QR Proof expiration: ${signerService.getProofExpiration()} seconds (rotating)`);
+  console.log(`Token-gated content: /gated/*`);
+  console.log(`Loyalty points: /loyalty/*`);
 });
