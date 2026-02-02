@@ -120,6 +120,125 @@ model TicketTier {
   @@index([eventId])
 }
 
+// Ticket - Minted NFT tickets (on-chain + fiat metadata)
+model Ticket {
+  id            String   @id @default(uuid())
+  tokenId       String?  // On-chain token id (string for bigint safety)
+  tokenUri      String?
+  walletAddress String
+  eventId       String?
+  ticketType    String?
+  txHash        String?
+  chainId       Int?
+  paidWithFiat  Boolean  @default(false)
+  amountPaid    Decimal? @db.Decimal(18, 2)
+  currency      String   @default("USD")
+  stripeSessionId String?
+  status        String   @default("minted")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([walletAddress])
+  @@index([eventId])
+  @@index([stripeSessionId])
+}
+
+// Stripe session tracking (fiat purchases)
+model PaymentSession {
+  id            String   @id @default(uuid())
+  provider      String   @default("stripe")
+  sessionId     String   @unique
+  eventId       String?
+  walletAddress String?
+  ticketType    String?
+  quantity      Int      @default(1)
+  amountTotal   Decimal? @db.Decimal(18, 2)
+  currency      String   @default("USD")
+  status        String   @default("completed")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([walletAddress])
+  @@index([eventId])
+}
+
+// Device tokens for push notifications
+model DeviceToken {
+  id            String   @id @default(uuid())
+  walletAddress String
+  token         String
+  platform      String
+  registeredAt  DateTime @default(now())
+  lastSeen      DateTime @default(now())
+
+  @@index([walletAddress])
+  @@unique([walletAddress, token])
+}
+
+// Token-gating rules
+model GatingRule {
+  id          String   @id
+  name        String
+  description String?
+  requireAll  Boolean  @default(true)
+  reward      Json
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  requirements GatingRequirement[]
+}
+
+model GatingRequirement {
+  id              String   @id @default(uuid())
+  ruleId          String
+  rule            GatingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  contractAddress String
+  chainId         Int
+  tokenType       String
+  ruleType        String
+  tokenId         String?
+  minCount        Int?
+
+  @@index([ruleId])
+}
+
+// Off-chain loyalty tracking (fallback when not using on-chain contract)
+model LoyaltyAccount {
+  id            String   @id @default(uuid())
+  walletAddress String   @unique
+  points        Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  earnings      LoyaltyEarning[]
+  redemptions   LoyaltyRedemption[]
+}
+
+model LoyaltyEarning {
+  id            String   @id @default(uuid())
+  walletAddress String
+  amount        Int
+  reason        String
+  timestamp     DateTime @default(now())
+
+  account       LoyaltyAccount @relation(fields: [walletAddress], references: [walletAddress], onDelete: Cascade)
+
+  @@index([walletAddress, timestamp])
+}
+
+model LoyaltyRedemption {
+  id            String   @id @default(uuid())
+  walletAddress String
+  amount        Int
+  reward        String
+  timestamp     DateTime @default(now())
+
+  account       LoyaltyAccount @relation(fields: [walletAddress], references: [walletAddress], onDelete: Cascade)
+
+  @@index([walletAddress, timestamp])
+}
+
 // API Keys for organizer integrations
 model ApiKey {
   id          String   @id @default(uuid())

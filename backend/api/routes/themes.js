@@ -7,6 +7,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
+const { getPrisma } = require('../../prisma/client');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'nfticket-secret-key';
 
@@ -55,14 +56,28 @@ function verifyToken(req, res, next) {
 }
 
 // Check if user is organizer
-function requireOrganizer(req, res, next) {
+async function requireOrganizer(req, res, next) {
   const address = req.user.address.toLowerCase();
-  
-  // Check if user is registered as organizer
+  const prisma = getPrisma();
+
+  if (prisma) {
+    const organizer = await prisma.organizer.findUnique({
+      where: { walletAddress: address }
+    });
+
+    if (!organizer) {
+      return res.status(403).json({ error: 'Organizer access required' });
+    }
+
+    req.organizer = organizer;
+    return next();
+  }
+
+  // In-memory fallback
   if (!organizers.has(address)) {
     return res.status(403).json({ error: 'Organizer access required' });
   }
-  
+
   req.organizer = organizers.get(address);
   next();
 }
@@ -76,18 +91,41 @@ function requireOrganizer(req, res, next) {
 router.get('/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
-    
-    // Find organizer by slug
+
+    const prisma = getPrisma();
+    if (prisma) {
+      const organizer = await prisma.organizer.findUnique({
+        where: { slug: slug.toLowerCase() },
+        include: { theme: true }
+      });
+
+      if (!organizer) {
+        return res.json({
+          theme: DEFAULT_THEME,
+          organizer: null,
+        });
+      }
+
+      const theme = organizer.theme || DEFAULT_THEME;
+      return res.json({
+        theme: { ...DEFAULT_THEME, ...theme },
+        organizer: {
+          name: organizer.name,
+          slug: organizer.slug,
+        },
+      });
+    }
+
+    // In-memory fallback
     let organizer = null;
     for (const [, org] of organizers) {
-      if (org.slug === slug) {
+      if (org.slug === slug.toLowerCase()) {
         organizer = org;
         break;
       }
     }
 
     if (!organizer) {
-      // Return default theme for unknown organizers
       return res.json({
         theme: DEFAULT_THEME,
         organizer: null,
@@ -97,14 +135,8 @@ router.get('/:slug', async (req, res) => {
     const theme = themes.get(organizer.id) || DEFAULT_THEME;
 
     res.json({
-      theme: {
-        ...DEFAULT_THEME,
-        ...theme,
-      },
-      organizer: {
-        name: organizer.name,
-        slug: organizer.slug,
-      },
+      theme: { ...DEFAULT_THEME, ...theme },
+      organizer: { name: organizer.name, slug: organizer.slug },
     });
   } catch (error) {
     console.error('Fetch theme error:', error);
@@ -119,26 +151,42 @@ router.get('/:slug', async (req, res) => {
 router.get('/by-domain/:domain', async (req, res) => {
   try {
     const { domain } = req.params;
-    
-    // Find theme with matching custom domain
+
+    const prisma = getPrisma();
+    if (prisma) {
+      const theme = await prisma.theme.findFirst({
+        where: { customDomain: domain },
+        include: { organizer: true }
+      });
+
+      if (!theme) {
+        return res.json({
+          theme: DEFAULT_THEME,
+          organizer: null,
+        });
+      }
+
+      return res.json({
+        theme: { ...DEFAULT_THEME, ...theme },
+        organizer: theme.organizer ? {
+          name: theme.organizer.name,
+          slug: theme.organizer.slug,
+        } : null,
+      });
+    }
+
+    // In-memory fallback
     for (const [organizerId, theme] of themes) {
       if (theme.customDomain === domain) {
         const organizer = organizers.get(organizerId);
         return res.json({
           theme: { ...DEFAULT_THEME, ...theme },
-          organizer: organizer ? {
-            name: organizer.name,
-            slug: organizer.slug,
-          } : null,
+          organizer: organizer ? { name: organizer.name, slug: organizer.slug } : null,
         });
       }
     }
 
-    // Return default theme
-    res.json({
-      theme: DEFAULT_THEME,
-      organizer: null,
-    });
+    res.json({ theme: DEFAULT_THEME, organizer: null });
   } catch (error) {
     console.error('Fetch theme by domain error:', error);
     res.status(500).json({ error: 'Failed to fetch theme' });
@@ -190,14 +238,39 @@ router.post('/register', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Name and slug are required' });
     }
 
-    // Check if slug is taken
+    const prisma = getPrisma();
+    if (prisma) {
+      try {
+        const organizer = await prisma.organizer.create({
+          data: {
+            name,
+            slug: slug.toLowerCase(),
+            email: email || null,
+            walletAddress: address,
+            theme: { create: { ...DEFAULT_THEME } },
+          },
+          include: { theme: true }
+        });
+
+        return res.status(201).json({
+          organizer,
+          theme: organizer.theme || DEFAULT_THEME,
+        });
+      } catch (dbError) {
+        if (dbError.code === 'P2002') {
+          return res.status(400).json({ error: 'Slug or wallet already registered' });
+        }
+        throw dbError;
+      }
+    }
+
+    // In-memory fallback
     for (const [, org] of organizers) {
       if (org.slug === slug.toLowerCase()) {
         return res.status(400).json({ error: 'Slug already taken' });
       }
     }
 
-    // Create organizer
     const organizerId = `org_${Date.now()}`;
     const organizer = {
       id: organizerId,
@@ -209,14 +282,9 @@ router.post('/register', verifyToken, async (req, res) => {
     };
 
     organizers.set(address, organizer);
-
-    // Initialize default theme
     themes.set(organizerId, { ...DEFAULT_THEME });
 
-    res.status(201).json({
-      organizer,
-      theme: DEFAULT_THEME,
-    });
+    res.status(201).json({ organizer, theme: DEFAULT_THEME });
   } catch (error) {
     console.error('Register organizer error:', error);
     res.status(500).json({ error: 'Failed to register organizer' });
@@ -230,6 +298,24 @@ router.post('/register', verifyToken, async (req, res) => {
 router.get('/my-theme', verifyToken, async (req, res) => {
   try {
     const address = req.user.address.toLowerCase();
+    const prisma = getPrisma();
+    if (prisma) {
+      const organizer = await prisma.organizer.findUnique({
+        where: { walletAddress: address },
+        include: { theme: true }
+      });
+
+      if (!organizer) {
+        return res.status(404).json({ error: 'Not registered as organizer' });
+      }
+
+      return res.json({
+        organizer: { id: organizer.id, name: organizer.name, slug: organizer.slug },
+        theme: { ...DEFAULT_THEME, ...organizer.theme },
+      });
+    }
+
+    // In-memory fallback
     const organizer = organizers.get(address);
 
     if (!organizer) {
@@ -239,11 +325,7 @@ router.get('/my-theme', verifyToken, async (req, res) => {
     const theme = themes.get(organizer.id) || DEFAULT_THEME;
 
     res.json({
-      organizer: {
-        id: organizer.id,
-        name: organizer.name,
-        slug: organizer.slug,
-      },
+      organizer: { id: organizer.id, name: organizer.name, slug: organizer.slug },
       theme: { ...DEFAULT_THEME, ...theme },
     });
   } catch (error) {
@@ -259,13 +341,6 @@ router.get('/my-theme', verifyToken, async (req, res) => {
 router.put('/my-theme', verifyToken, async (req, res) => {
   try {
     const address = req.user.address.toLowerCase();
-    const organizer = organizers.get(address);
-
-    if (!organizer) {
-      return res.status(403).json({ error: 'Organizer access required' });
-    }
-
-    const currentTheme = themes.get(organizer.id) || {};
     const updates = req.body;
 
     // Validate color values
@@ -281,7 +356,35 @@ router.put('/my-theme', verifyToken, async (req, res) => {
       }
     }
 
-    // Update theme
+    const prisma = getPrisma();
+    if (prisma) {
+      const organizer = await prisma.organizer.findUnique({
+        where: { walletAddress: address },
+        include: { theme: true }
+      });
+
+      if (!organizer) {
+        return res.status(403).json({ error: 'Organizer access required' });
+      }
+
+      const updatedTheme = await prisma.theme.upsert({
+        where: { organizerId: organizer.id },
+        create: { organizerId: organizer.id, ...DEFAULT_THEME, ...updates },
+        update: { ...updates }
+      });
+
+      return res.json({
+        theme: { ...DEFAULT_THEME, ...updatedTheme },
+      });
+    }
+
+    // In-memory fallback
+    const organizer = organizers.get(address);
+    if (!organizer) {
+      return res.status(403).json({ error: 'Organizer access required' });
+    }
+
+    const currentTheme = themes.get(organizer.id) || {};
     const updatedTheme = {
       ...currentTheme,
       ...updates,
@@ -290,9 +393,7 @@ router.put('/my-theme', verifyToken, async (req, res) => {
 
     themes.set(organizer.id, updatedTheme);
 
-    res.json({
-      theme: { ...DEFAULT_THEME, ...updatedTheme },
-    });
+    res.json({ theme: { ...DEFAULT_THEME, ...updatedTheme } });
   } catch (error) {
     console.error('Update theme error:', error);
     res.status(500).json({ error: 'Failed to update theme' });
@@ -330,14 +431,25 @@ router.post('/preview', verifyToken, async (req, res) => {
 router.get('/css/:slug', async (req, res) => {
   try {
     const { slug } = req.params;
-    
+
+    const prisma = getPrisma();
     let theme = DEFAULT_THEME;
-    
-    // Find organizer by slug
-    for (const [, org] of organizers) {
-      if (org.slug === slug) {
-        theme = { ...DEFAULT_THEME, ...themes.get(org.id) };
-        break;
+
+    if (prisma) {
+      const organizer = await prisma.organizer.findUnique({
+        where: { slug: slug.toLowerCase() },
+        include: { theme: true }
+      });
+
+      if (organizer?.theme) {
+        theme = { ...DEFAULT_THEME, ...organizer.theme };
+      }
+    } else {
+      for (const [, org] of organizers) {
+        if (org.slug === slug.toLowerCase()) {
+          theme = { ...DEFAULT_THEME, ...themes.get(org.id) };
+          break;
+        }
       }
     }
 

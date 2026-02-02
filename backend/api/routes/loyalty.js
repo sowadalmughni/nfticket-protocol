@@ -8,6 +8,7 @@ const express = require('express');
 const { ethers } = require('ethers');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
+const { getPrisma } = require('../../prisma/client');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'nfticket-secret-key';
 
@@ -86,6 +87,14 @@ function verifyToken(req, res, next) {
 const offChainPoints = new Map();
 const earningHistory = new Map();
 const redemptionHistory = new Map();
+
+async function getOrCreateAccount(prisma, address) {
+  return prisma.loyaltyAccount.upsert({
+    where: { walletAddress: address },
+    create: { walletAddress: address },
+    update: {}
+  });
+}
 
 // Initialize user points
 function initUser(address) {
@@ -185,8 +194,6 @@ router.get('/balance', verifyToken, async (req, res) => {
     const address = req.user.address.toLowerCase();
     const chainId = parseInt(req.query.chainId) || 31337;
 
-    initUser(address);
-
     const contract = getLoyaltyContract(chainId);
     if (contract) {
       const [balance, tier, nextTier] = await Promise.all([
@@ -207,6 +214,42 @@ router.get('/balance', verifyToken, async (req, res) => {
         },
       });
     }
+
+    const prisma = getPrisma();
+    if (prisma) {
+      const account = await getOrCreateAccount(prisma, address);
+      const points = account.points || 0;
+
+      const tiers = [
+        { name: 'Bronze', threshold: 0, discountPercent: 0 },
+        { name: 'Silver', threshold: 500, discountPercent: 5 },
+        { name: 'Gold', threshold: 2000, discountPercent: 10 },
+        { name: 'Platinum', threshold: 5000, discountPercent: 15 },
+        { name: 'Diamond', threshold: 10000, discountPercent: 25 },
+      ];
+
+      let currentTier = tiers[0];
+      let nextTier = tiers[1];
+
+      for (let i = tiers.length - 1; i >= 0; i--) {
+        if (points >= tiers[i].threshold) {
+          currentTier = tiers[i];
+          nextTier = tiers[i + 1] || null;
+          break;
+        }
+      }
+
+      return res.json({
+        points,
+        tier: currentTier,
+        nextTier: nextTier ? {
+          name: nextTier.name,
+          pointsNeeded: nextTier.threshold - points,
+        } : null,
+      });
+    }
+
+    initUser(address);
 
     // Off-chain points
     const points = offChainPoints.get(address) || 0;
@@ -253,8 +296,6 @@ router.get('/history', verifyToken, async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const chainId = parseInt(req.query.chainId) || 31337;
 
-    initUser(address);
-
     const contract = getLoyaltyContract(chainId);
     if (contract) {
       const [earnings, redemptions] = await Promise.all([
@@ -275,6 +316,37 @@ router.get('/history', verifyToken, async (req, res) => {
         })),
       });
     }
+
+    const prisma = getPrisma();
+    if (prisma) {
+      const [earnings, redemptions] = await Promise.all([
+        prisma.loyaltyEarning.findMany({
+          where: { walletAddress: address },
+          orderBy: { timestamp: 'desc' },
+          take: limit,
+        }),
+        prisma.loyaltyRedemption.findMany({
+          where: { walletAddress: address },
+          orderBy: { timestamp: 'desc' },
+          take: limit,
+        })
+      ]);
+
+      return res.json({
+        earnings: earnings.map(e => ({
+          amount: e.amount,
+          reason: e.reason,
+          timestamp: new Date(e.timestamp).getTime(),
+        })),
+        redemptions: redemptions.map(r => ({
+          amount: r.amount,
+          reward: r.reward,
+          timestamp: new Date(r.timestamp).getTime(),
+        })),
+      });
+    }
+
+    initUser(address);
 
     // Off-chain history
     res.json({
@@ -304,6 +376,30 @@ router.post('/redeem', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Reward description required' });
     }
 
+    const prisma = getPrisma();
+    if (prisma) {
+      const account = await getOrCreateAccount(prisma, address);
+      if (account.points < amount) {
+        return res.status(400).json({ error: 'Insufficient points' });
+      }
+
+      const [updated] = await prisma.$transaction([
+        prisma.loyaltyAccount.update({
+          where: { walletAddress: address },
+          data: { points: { decrement: amount } }
+        }),
+        prisma.loyaltyRedemption.create({
+          data: { walletAddress: address, amount, reward }
+        })
+      ]);
+
+      return res.json({
+        success: true,
+        newBalance: updated.points,
+        redemption: { amount, reward },
+      });
+    }
+
     initUser(address);
 
     const currentPoints = offChainPoints.get(address) || 0;
@@ -311,10 +407,8 @@ router.post('/redeem', verifyToken, async (req, res) => {
       return res.status(400).json({ error: 'Insufficient points' });
     }
 
-    // Deduct points
     offChainPoints.set(address, currentPoints - amount);
 
-    // Record redemption
     const history = redemptionHistory.get(address) || [];
     history.unshift({
       amount,
@@ -359,6 +453,28 @@ router.post('/award', async (req, res) => {
     }
 
     const addr = address.toLowerCase();
+    const prisma = getPrisma();
+
+    if (prisma) {
+      await getOrCreateAccount(prisma, addr);
+
+      const [updated] = await prisma.$transaction([
+        prisma.loyaltyAccount.update({
+          where: { walletAddress: addr },
+          data: { points: { increment: amount } }
+        }),
+        prisma.loyaltyEarning.create({
+          data: { walletAddress: addr, amount, reason: reason || 'Points Awarded' }
+        })
+      ]);
+
+      return res.json({
+        success: true,
+        newBalance: updated.points,
+        awarded: { amount, reason },
+      });
+    }
+
     initUser(addr);
 
     const currentPoints = offChainPoints.get(addr) || 0;
@@ -391,6 +507,22 @@ router.get('/leaderboard', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 10;
 
+    const prisma = getPrisma();
+    if (prisma) {
+      const accounts = await prisma.loyaltyAccount.findMany({
+        orderBy: { points: 'desc' },
+        take: limit,
+      });
+
+      return res.json({
+        leaderboard: accounts.map((e, index) => ({
+          rank: index + 1,
+          address: e.walletAddress,
+          points: e.points,
+        }))
+      });
+    }
+
     // Convert map to sorted array
     const entries = Array.from(offChainPoints.entries())
       .map(([address, points]) => ({ address, points }))
@@ -416,6 +548,35 @@ router.get('/leaderboard', async (req, res) => {
  */
 router.get('/stats', async (req, res) => {
   try {
+    const prisma = getPrisma();
+    if (prisma) {
+      const accounts = await prisma.loyaltyAccount.findMany({
+        select: { points: true }
+      });
+
+      const totalUsers = accounts.length;
+      const totalPoints = accounts.reduce((sum, a) => sum + (a.points || 0), 0);
+
+      const tierCounts = { Bronze: 0, Silver: 0, Gold: 0, Platinum: 0, Diamond: 0 };
+      const thresholds = { Diamond: 10000, Platinum: 5000, Gold: 2000, Silver: 500, Bronze: 0 };
+
+      for (const account of accounts) {
+        for (const [tier, threshold] of Object.entries(thresholds)) {
+          if (account.points >= threshold) {
+            tierCounts[tier]++;
+            break;
+          }
+        }
+      }
+
+      return res.json({
+        totalUsers,
+        totalPoints,
+        averagePoints: totalUsers > 0 ? Math.round(totalPoints / totalUsers) : 0,
+        tierDistribution: tierCounts,
+      });
+    }
+
     const totalUsers = offChainPoints.size;
     const totalPoints = Array.from(offChainPoints.values()).reduce((sum, p) => sum + p, 0);
     

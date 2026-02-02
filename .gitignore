@@ -15,6 +15,11 @@ lerna-debug.log*
 .env.testnet
 .env.mainnet
 
+# Private analysis and reports
+STRATEGIC_ANALYSIS_REPORT.md
+*_ANALYSIS*.md
+*.private.md
+
 # Build outputs
 dist/
 build/
@@ -211,3 +216,4 @@ geth/
 
 test_output.txt
 subgraph/codegen_error.txt
+backend/.env.example

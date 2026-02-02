@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# Prevent committing secrets and local env files
+
+set -e
+
+# Block committing any .env or .env.* files (allow .env.example)
+if git diff --cached --name-only | grep -E "(^|/)\.env(\.|$)" | \
+  grep -vE "\.env\.example$|\.env\..*\.example$" >/dev/null 2>&1; then
+  echo "Error: Attempting to commit .env file(s). Remove them from the commit." >&2
+  exit 1
+fi
+
+# Block committing potential secret keys (skip .env.example)
+if git diff --cached --name-only | \
+  grep -vE "\.env\.example$|\.env\..*\.example$|^\.githooks/pre-commit$" | \
+  xargs -I{} sh -c 'git show :"{}" 2>/dev/null' | \
+  grep -E "(sk_test_|sk_live_|rk_test_|rk_live_|pk_test_|pk_live_|whsec_)" >/dev/null 2>&1; then
+  echo "Error: Potential secret detected in staged changes. Remove secrets before committing." >&2
+  exit 1
+fi
+
+exit 0

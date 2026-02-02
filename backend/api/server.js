@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 const signerService = require('../services/SignerService');
+const { getPrisma } = require('../prisma/client');
 const gatedRoutes = require('./routes/gated');
 const loyaltyRoutes = require('./routes/loyalty');
 const themesRoutes = require('./routes/themes');
@@ -9,7 +11,25 @@ const paymentsRoutes = require('./routes/payments');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.DASHBOARD_URL,
+  process.env.MARKETPLACE_URL,
+  process.env.CONSUMER_APP_URL,
+  process.env.NODE_ENV !== 'production' ? 'http://localhost:5173' : null,
+  process.env.NODE_ENV !== 'production' ? 'http://localhost:5174' : null,
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('CORS not allowed'));
+  },
+  credentials: true,
+  maxAge: 86400,
+}));
 
 const PORT = process.env.PORT || 3001;
 
@@ -37,6 +57,31 @@ const NOTIFICATION_TYPES = {
   EVENT_REMINDER: 'event_reminder',
 };
 
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many requests from this IP. Please try again later.'
+});
+
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many authentication attempts. Please try again later.'
+});
+
+const paymentsLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many payment requests. Please try again later.'
+});
+
 // Middleware: Verify JWT token
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -56,6 +101,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // POST /auth/login - Authenticate wallet signature and issue JWT
+app.use('/auth', authLimiter);
 app.post('/auth/login', async (req, res) => {
   const { address, signature, message } = req.body;
 
@@ -99,6 +145,7 @@ app.get('/auth/nonce', (req, res) => {
 });
 
 // Endpoint for the mobile scanner to verify a QR code (public endpoint)
+app.use('/verify', apiLimiter);
 app.post('/verify', async (req, res) => {
   const { data, signature } = req.body;
 
@@ -122,6 +169,7 @@ app.post('/verify', async (req, res) => {
 
 // Endpoint for generating a fresh proof (PROTECTED - requires authentication)
 // Supports multi-chain via chainId parameter
+app.use('/generate-proof', apiLimiter);
 app.post('/generate-proof', authenticateToken, async (req, res) => {
   const { tokenId, chainId } = req.body;
   const owner = req.user.address; // Get owner from authenticated JWT
@@ -248,7 +296,36 @@ app.post('/notifications/register', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Valid platform required (ios, android, web)' });
   }
 
-  // Store device token linked to wallet
+  const prisma = getPrisma();
+  if (prisma) {
+    prisma.deviceToken.upsert({
+      where: {
+        walletAddress_token: {
+          walletAddress: walletAddress.toLowerCase(),
+          token: deviceToken,
+        }
+      },
+      create: {
+        walletAddress: walletAddress.toLowerCase(),
+        token: deviceToken,
+        platform,
+        lastSeen: new Date(),
+      },
+      update: {
+        platform,
+        lastSeen: new Date(),
+      }
+    }).then(() => {
+      console.log(`[Notifications] Registered ${platform} device for ${walletAddress.slice(0, 10)}...`);
+      res.json({ success: true, message: 'Device registered for notifications' });
+    }).catch((error) => {
+      console.error('Register device error:', error);
+      res.status(500).json({ error: 'Failed to register device' });
+    });
+    return;
+  }
+
+  // In-memory fallback
   deviceTokens.set(walletAddress.toLowerCase(), {
     token: deviceToken,
     platform,
@@ -257,22 +334,35 @@ app.post('/notifications/register', authenticateToken, (req, res) => {
   });
 
   console.log(`[Notifications] Registered ${platform} device for ${walletAddress.slice(0, 10)}...`);
-  
-  res.json({ 
-    success: true, 
-    message: 'Device registered for notifications' 
-  });
+
+  res.json({ success: true, message: 'Device registered for notifications' });
 });
 
 // DELETE /notifications/unregister - Unregister device
 app.delete('/notifications/unregister', authenticateToken, (req, res) => {
   const walletAddress = req.user.address;
-  
+
+  const prisma = getPrisma();
+  if (prisma) {
+    prisma.deviceToken.deleteMany({
+      where: { walletAddress: walletAddress.toLowerCase() }
+    }).then((result) => {
+      res.json({
+        success: true,
+        message: result.count > 0 ? 'Device unregistered' : 'No device was registered'
+      });
+    }).catch((error) => {
+      console.error('Unregister device error:', error);
+      res.status(500).json({ error: 'Failed to unregister device' });
+    });
+    return;
+  }
+
   const deleted = deviceTokens.delete(walletAddress.toLowerCase());
-  
-  res.json({ 
-    success: true, 
-    message: deleted ? 'Device unregistered' : 'No device was registered' 
+
+  res.json({
+    success: true,
+    message: deleted ? 'Device unregistered' : 'No device was registered'
   });
 });
 
@@ -284,7 +374,21 @@ app.post('/notifications/send', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'targetAddress, type, and title are required' });
   }
 
-  const deviceInfo = deviceTokens.get(targetAddress.toLowerCase());
+  let deviceInfo = deviceTokens.get(targetAddress.toLowerCase());
+  const prisma = getPrisma();
+
+  if (prisma) {
+    const dbToken = await prisma.deviceToken.findFirst({
+      where: { walletAddress: targetAddress.toLowerCase() },
+      orderBy: { lastSeen: 'desc' }
+    });
+    if (dbToken) {
+      deviceInfo = {
+        token: dbToken.token,
+        platform: dbToken.platform,
+      };
+    }
+  }
   
   if (!deviceInfo) {
     return res.status(404).json({ error: 'No device registered for this address' });
@@ -321,7 +425,21 @@ app.post('/notifications/broadcast', authenticateToken, async (req, res) => {
   };
 
   for (const address of addresses) {
-    const deviceInfo = deviceTokens.get(address.toLowerCase());
+    let deviceInfo = deviceTokens.get(address.toLowerCase());
+    const prisma = getPrisma();
+
+    if (prisma) {
+      const dbToken = await prisma.deviceToken.findFirst({
+        where: { walletAddress: address.toLowerCase() },
+        orderBy: { lastSeen: 'desc' }
+      });
+      if (dbToken) {
+        deviceInfo = {
+          token: dbToken.token,
+          platform: dbToken.platform,
+        };
+      }
+    }
     
     if (!deviceInfo) {
       results.notRegistered++;
@@ -342,8 +460,27 @@ app.post('/notifications/broadcast', authenticateToken, async (req, res) => {
 // GET /notifications/status - Check notification registration status
 app.get('/notifications/status', authenticateToken, (req, res) => {
   const walletAddress = req.user.address;
+  const prisma = getPrisma();
+
+  if (prisma) {
+    prisma.deviceToken.findFirst({
+      where: { walletAddress: walletAddress.toLowerCase() },
+      orderBy: { lastSeen: 'desc' }
+    }).then((deviceInfo) => {
+      res.json({
+        registered: !!deviceInfo,
+        platform: deviceInfo?.platform || null,
+        registeredAt: deviceInfo?.registeredAt || null
+      });
+    }).catch((error) => {
+      console.error('Notification status error:', error);
+      res.status(500).json({ error: 'Failed to fetch notification status' });
+    });
+    return;
+  }
+
   const deviceInfo = deviceTokens.get(walletAddress.toLowerCase());
-  
+
   res.json({
     registered: !!deviceInfo,
     platform: deviceInfo?.platform || null,
@@ -438,7 +575,22 @@ async function notifyTicketEvent(walletAddress, eventType, ticketData) {
   const template = templates[eventType];
   if (!template) return;
 
-  const deviceInfo = deviceTokens.get(walletAddress.toLowerCase());
+  let deviceInfo = deviceTokens.get(walletAddress.toLowerCase());
+  const prisma = getPrisma();
+
+  if (prisma) {
+    const dbToken = await prisma.deviceToken.findFirst({
+      where: { walletAddress: walletAddress.toLowerCase() },
+      orderBy: { lastSeen: 'desc' }
+    });
+    if (dbToken) {
+      deviceInfo = {
+        token: dbToken.token,
+        platform: dbToken.platform,
+      };
+    }
+  }
+
   if (!deviceInfo) return;
 
   try {
@@ -483,6 +635,7 @@ app.use('/loyalty', loyaltyRoutes);
 app.use('/themes', themesRoutes);
 
 // Payment routes - /payments/* (Stripe integration)
+app.use('/payments', paymentsLimiter);
 app.use('/payments', paymentsRoutes);
 
 // Health check endpoint
